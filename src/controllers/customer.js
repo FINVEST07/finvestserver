@@ -48,38 +48,44 @@ export const CreateCustomer = async (req, res) => {
 
 export const getSingleCustomer = async (req, res) => {
   try {
-    const  { email }  = req.query;
+    const { email, customer_id } = req.query;
 
-    if (!email) {
-      console.error("Email Not Provided");
-
+    // Check if at least one parameter is provided
+    if (!email && !customer_id) {
+      console.error("Email or Customer ID not provided");
       return res.status(400).json({
         message: "Unable to load data at the moment",
       });
     }
 
     const db = mongoose.connection.db;
-  
-    const customer = await db.collection("customers").findOne({ email });
 
-  
+    // Build query object based on available parameters
+    let query = {};
+
+    if (email) {
+      query.email = email;
+    } else if (customer_id) {
+      query.customer_id = customer_id;
+    }
+
+    const customer = await db.collection("customers").findOne(query);
+
     if (!customer) {
       console.error("Customer not found in database");
-
       return res.status(404).json({
         message: "Unable to load data at the moment",
       });
     }
 
     return res.status(200).json({
-      message: "Succesfully Fetched",
+      message: "Successfully Fetched",
       payload: customer,
     });
   } catch (error) {
     console.error(error);
-    return res.status(200).json({
+    return res.status(500).json({
       message: "Internal Server Error",
-     
     });
   }
 };
@@ -140,11 +146,6 @@ export const savecustomer = async (req, res) => {
       { returnDocument: "after" } // Return updated document
     );
 
-   
-
-   
-    
-
     res.status(200).json({
       message: "Data Saved",
       user: updateResult.value,
@@ -155,13 +156,13 @@ export const savecustomer = async (req, res) => {
   }
 };
 
-
 export const getCustomers = async (req, res) => {
   try {
     const db = mongoose.connection.db;
 
     // Await the result and sort by createdAt descending (-1)
-    const users = await db.collection("customers")
+    const users = await db
+      .collection("customers")
       .find({})
       .sort({ createdAt: -1 })
       .toArray();
@@ -182,8 +183,3 @@ export const getCustomers = async (req, res) => {
     });
   }
 };
-
-
-
-
-

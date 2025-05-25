@@ -190,6 +190,7 @@ export const getApplications = async (req, res) => {
   }
 };
 
+
 export const getApplicationCustomers = async (req, res) => {
   try {
     const rank = req.query.rank;
@@ -204,7 +205,6 @@ export const getApplicationCustomers = async (req, res) => {
       applications = await db
         .collection("applications")
         .find({
-          status: "Processing",
           servicetype: { $nin: [4, "4"] },
         })
         .sort({ createdAt: -1 })
@@ -237,6 +237,7 @@ export const getApplicationCustomers = async (req, res) => {
     });
   }
 };
+
 
 export const handleComplete = async (req, res) => {
   try {

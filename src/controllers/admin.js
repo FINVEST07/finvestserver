@@ -68,9 +68,7 @@ export const adminlogin = async (req, res) => {
       email: decrypteddata.email,
     };
 
-    const encryptedpayload = encryptData(payload , process.env.KEY)
-
-
+    const encryptedpayload = encryptData(payload, process.env.KEY);
 
     return res.status(200).json({
       payload: encryptedpayload,
@@ -129,57 +127,115 @@ export const getAdmins = async (req, res) => {
 
 export const addAdmin = async (req, res) => {
   try {
-    // console.log(req.body.payload);
-
-    const { fullName, email, mobile, rank } = req.body.payload;
-
+    const { fullName, adminname, email, mobile, rank, adminId } =
+      req.body.payload;
+    const update = req.body.update;
     const data = req.body.payload;
 
-    if (!fullName || !email || !mobile || !rank) {
+    // Validation: either fullName or adminname must be present, along with other required fields
+    if ((!fullName && !adminname) || !email || !mobile || !rank) {
       return res.status(400).json({
         status: false,
         message: "Required Fields are Missing",
       });
     }
 
-    delete data.fullName;
-
-    data.adminname = fullName;
-
-    const existingadmin = await checkExisting(email);
-
-    if (existingadmin) {
-      return res
-        .status(400)
-        .json({ message: "Email ID is already registered with another admin" });
+    // For updates, adminId is required
+    if (update && !email) {
+      return res.status(400).json({
+        status: false,
+        message: "Email ID is required for updates",
+      });
     }
 
     const db = mongoose.connection.db;
+    const finalAdminName = fullName || adminname;
 
-    const name = fullName.slice(0, 4).toUpperCase();
-    const number = mobile.slice(6, 10);
+    if (update) {
+      // UPDATE EXISTING ADMIN
 
-    const password = name + number;
+      // Check if admin exists
+      const existingAdmin = await db
+        .collection("admin")
+        .findOne({ email: email });
 
-    data.password = password;
+      if (!existingAdmin) {
+        return res.status(404).json({
+          status: false,
+          message: "Admin not found",
+        });
+      }
 
-    await db.collection("admin").insertOne({
-      adminname: fullName,
-      email,
-      mobile,
-      rank,
-      password,
-    });
+      // Check if email is being changed and if new email already exists (but not for current admin)
+      if (email !== existingAdmin.email) {
+        const emailExists = await checkExisting(email);
+        if (emailExists) {
+          return res.status(400).json({
+            status: false,
+            message: "Email ID is already registered with another admin",
+          });
+        }
+      }
 
-    await db.collection("applications").deleteOne({
-      servicetype: "4" || 4,
-      email: email,
-    });
+      // Prepare update data
+      const updateData = {
+        adminname: finalAdminName,
+        email,
+        mobile,
+        rank,
+        password: existingAdmin.password,
+      };
 
-    return res.status(200).json({
-      message: "Admin added Successfully",
-      status: true,
-    });
+      // Update the admin
+      await db
+        .collection("admin")
+        .updateOne({ email: email }, { $set: updateData });
+
+      return res.status(200).json({
+        message: "Admin updated successfully",
+        status: true,
+      });
+    } else {
+      // ADD NEW ADMIN (Original logic)
+
+      // Clean up data object
+      delete data.fullName;
+      data.adminname = finalAdminName;
+
+      // Check if email already exists
+      const existingadmin = await checkExisting(email);
+      if (existingadmin) {
+        return res.status(400).json({
+          status: false,
+          message: "Email ID is already registered with another admin",
+        });
+      }
+
+      // Generate password
+      const name = finalAdminName.slice(0, 4).toUpperCase();
+      const number = mobile.slice(6, 10);
+      const password = name + number;
+
+      // Insert new admin
+      await db.collection("admin").insertOne({
+        adminname: finalAdminName,
+        email,
+        mobile,
+        rank,
+        password,
+      });
+
+      // Delete the application request
+      await db.collection("applications").deleteOne({
+        servicetype: "4" || 4,
+        email: email,
+      });
+
+      return res.status(200).json({
+        message: "Admin added successfully",
+        status: true,
+      });
+    }
   } catch (error) {
     console.error(error);
 
