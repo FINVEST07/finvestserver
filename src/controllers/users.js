@@ -41,7 +41,9 @@ export const adduser = async (req, res) => {
     const { name, email, mobile, password } = req.body.payload; // Extract data from request
 
     if (!name || !email || !mobile || !password) {
-      return res.status(400).json({ message: "Some Fields are missing" });
+      return res
+        .status(400)
+        .json({ status: false, message: "Some Fields are missing" });
     }
 
     // Function to generate user ID (random 6-digit number + timestamp)
@@ -57,7 +59,9 @@ export const adduser = async (req, res) => {
     });
 
     if (existingUser) {
-      return res.status(400).json({ message: "User Already exists" });
+      return res
+        .status(400)
+        .json({ status: false, message: "User Already exists" });
     }
 
     const otp = await sendotp(email);
@@ -73,10 +77,12 @@ export const adduser = async (req, res) => {
       otpGeneratedAt: new Date(),
     });
 
-    return res.status(200).json({ message: "opd generated successfully" });
+    return res
+      .status(200)
+      .json({ status: true, message: "opd generated successfully" });
   } catch (error) {
     console.error("Error registering user:", error);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ status: false, message: "Internal Server Error" });
   }
 };
 
@@ -93,13 +99,16 @@ export const verifyotp = async (req, res) => {
     const user = await db.collection("users").findOne({ email });
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ status: false, message: "User not found" });
     }
 
     if (!user.otp || !user.otpGeneratedAt) {
       return res
         .status(400)
-        .json({ message: "No OTP found. Please request a new one." });
+        .json({
+          status: false,
+          message: "No OTP found. Please request a new one.",
+        });
     }
 
     // Check if OTP has expired (10 minutes expiry)
@@ -113,7 +122,8 @@ export const verifyotp = async (req, res) => {
 
     // Match OTP
     if (user.otp !== otp) {
-      return res.status(401).json({ message: "Invalid OTP" });
+      await db.collection("users").deleteOne({ email: email });
+      return res.status(401).json({ status: false, message: "Invalid OTP" });
     }
 
     // ✅ Success: Clear OTP and mark as verified
@@ -127,13 +137,18 @@ export const verifyotp = async (req, res) => {
 
     return res
       .status(200)
-      .json({ message: "OTP verified successfully", name: user.name });
+      .json({
+        message: "OTP verified successfully",
+        name: user.name,
+        status: true,
+      });
   } catch (error) {
     console.error("Verify OTP Error:", error);
-    return res.status(500).json({ message: "Internal server error" });
+    return res
+      .status(500)
+      .json({ status: false, message: "Internal server error" });
   }
 };
-
 
 export const SendLoginOtp = async (req, res) => {
   try {
@@ -215,6 +230,7 @@ export const LoginwithOtp = async (req, res) => {
   if (!email || !otp) {
     return res.status(400).json({
       message: "Required fields are missing",
+      status: false,
     });
   }
 
@@ -234,13 +250,16 @@ export const LoginwithOtp = async (req, res) => {
     const timeDiff = (now - user.otpGeneratedAt) / 1000; // in seconds
 
     if (!isOtpMatch) {
-      return res.status(401).json({ message: "Invalid OTP" });
+      return res.status(401).json({ status: false, message: "Incorrect OTP" });
     }
 
     if (timeDiff > 120) {
       return res
         .status(410)
-        .json({ message: "OTP has expired. Please request a new one." });
+        .json({
+          status: false,
+          message: "OTP has expired. Please request a new one.",
+        });
     }
 
     // OTP is valid and within 2 minutes
@@ -248,16 +267,18 @@ export const LoginwithOtp = async (req, res) => {
     await db.collection("login").deleteOne({ email });
 
     // user extracted from user collection
-    const newuser = await db.collection("users").findOne({email});
-    
+    const newuser = await db.collection("users").findOne({ email });
 
     return res.status(200).json({
       message: "login successfully",
-      mobile : newuser.mobile,
+      mobile: newuser.mobile,
+      status: true,
     });
   } catch (error) {
     console.error("Error in LoginwithOtp:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ status: false, message: "Internal Server Error" });
   }
 };
 
@@ -267,6 +288,7 @@ export const LoginPassword = async (req, res) => {
   if (!email || !password) {
     return res.status(400).json({
       message: "Required fields are missing",
+      status: false,
     });
   }
 
@@ -276,32 +298,39 @@ export const LoginPassword = async (req, res) => {
     const user = await db.collection("users").findOne({ email });
 
     if (!user) {
-      return res.status(404).json({ message: "User not found." });
+      return res
+        .status(404)
+        .json({ message: "User not found.", status: false });
     }
 
     const isPassMatch = user.password == password;
 
     if (!isPassMatch) {
-      return res.status(401).json({ message: "Invalid Password" });
+      return res
+        .status(401)
+        .json({ message: "Invalid Password", status: false });
     }
 
     return res.status(200).json({
       message: "login successfully",
-      mobile : user.mobile,
+      mobile: user.mobile,
+      status: true,
     });
   } catch (error) {
     console.error("Error in LoginwithOtp:", error);
-    return res.status(500).json({ message: "Internal Serve Error" });
+    return res
+      .status(500)
+      .json({ message: "Internal Serve Error", status: false });
   }
 };
-
 
 export const getUsers = async (req, res) => {
   try {
     const db = mongoose.connection.db;
 
     // Await the result and sort by createdAt descending (-1)
-    const users = await db.collection("users")
+    const users = await db
+      .collection("users")
       .find({})
       .sort({ createdAt: -1 })
       .toArray();

@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-import { decryptData } from "../utils/Security.js";
+import { decryptData, encryptData } from "../utils/Security.js";
 
 const checkExisting = async (email) => {
   try {
@@ -62,10 +62,18 @@ export const adminlogin = async (req, res) => {
       return res.status(400).json({ message: "Incorrect Password" });
     }
 
-    return res.status(200).json({
+    const payload = {
       message: "Login Successful",
       rank: isVerified.rank,
       email: decrypteddata.email,
+    };
+
+    const encryptedpayload = encryptData(payload , process.env.KEY)
+
+
+
+    return res.status(200).json({
+      payload: encryptedpayload,
     });
   } catch (error) {
     console.error("Error in adminlogin:", error);

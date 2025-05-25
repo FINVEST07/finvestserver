@@ -54,23 +54,25 @@ export const getDashboardNumbers = async (req, res) => {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
 
-    // If current month is Jan/Feb/Mar, fiscal year started last year
     const fiscalStartYear = currentMonth <= 3 ? currentYear - 1 : currentYear;
     const fiscalEndYear = fiscalStartYear + 1;
 
     const startOfFinancialYear = new Date(`${fiscalStartYear}-04-01T00:00:00.000Z`);
     const endOfFinancialYear = new Date(`${fiscalEndYear}-03-31T23:59:59.999Z`);
 
-    // Financial year months: 04 (Apr) to 03 (Mar next year)
     const monthOrder = [
       "04", "05", "06", "07", "08", "09",
       "10", "11", "12", "01", "02", "03"
     ];
 
-    // Init structure
     const monthlyData = {};
     monthOrder.forEach(month => {
-      monthlyData[month] = { applications: 0, users: 0, visitors: 0 };
+      monthlyData[month] = {
+        applications: 0,
+        users: 0,
+        visitors: 0,
+        enquiries: 0
+      };
     });
 
     // Applications
@@ -95,6 +97,17 @@ export const getDashboardNumbers = async (req, res) => {
       if (monthlyData[month]) monthlyData[month].users += 1;
     });
 
+    // Enquiries
+    const enquiries = await db.collection("enquiries").find({
+      createdAt: { $gte: startOfFinancialYear, $lte: endOfFinancialYear }
+    }).toArray();
+
+    enquiries.forEach(enq => {
+      const date = new Date(enq.createdAt);
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      if (monthlyData[month]) monthlyData[month].enquiries += 1;
+    });
+
     // Visitors
     const visitorDoc = await db.collection("visitors").findOne({ name: "counter" });
 
@@ -112,12 +125,13 @@ export const getDashboardNumbers = async (req, res) => {
       });
     }
 
-    // Format result in April to March order
+    // Final formatted response
     const result = monthOrder.map(monthNum => ({
       month: MONTH_NAMES[parseInt(monthNum) - 1],
       visitors: monthlyData[monthNum].visitors,
       users: monthlyData[monthNum].users,
-      applications: monthlyData[monthNum].applications
+      applications: monthlyData[monthNum].applications,
+      enquiries: monthlyData[monthNum].enquiries
     }));
 
     return res.status(200).json({ payload: result });
