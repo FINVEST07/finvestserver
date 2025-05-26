@@ -58,48 +58,16 @@ export const createapplication = async (req, res) => {
         applicationId: data.applicationId,
       });
     } else {
+      // Initialize representativeid
       let representativeid;
-      if (validData.servicetype != "4" || validData.servicetype != 4) {
-        if (validData.city === "Mumbai") {
-          // Step 1: Mumbai - rank 2
-          const reps = await db
-            .collection("admin")
-            .find({ rank: "2" })
-            .toArray();
-          if (reps.length > 0) {
-            console.log("got here");
 
-            const randomRep = reps[Math.floor(Math.random() * reps.length)];
-            representativeid = randomRep.email;
-          }
-        } else {
-          // Step 2: Other cities - rank 3 with city match
-          const rank3Reps = await db
-            .collection("admin")
-            .find({ rank: "3" })
-            .toArray();
-          const cityMatchedReps = rank3Reps.filter(
-            (rep) => rep.city === validData.city
-          );
+      // Fixed condition logic - use AND (&&) instead of OR (||)
+      if (validData.servicetype != "4" && validData.servicetype != 4) {
+        // Fixed await for async operation
+        const admin = await db.collection("admin").findOne({ location: validData.location });
 
-          if (cityMatchedReps.length > 0) {
-            const randomRep =
-              cityMatchedReps[
-                Math.floor(Math.random() * cityMatchedReps.length)
-              ];
-            representativeid = randomRep.email;
-          } else {
-            // Step 3: Fallback to rank 2
-            const fallbackReps = await db
-              .collection("admin")
-              .find({ rank: "2" })
-              .toArray();
-            if (fallbackReps.length > 0) {
-              const randomRep =
-                fallbackReps[Math.floor(Math.random() * fallbackReps.length)];
-              representativeid = randomRep.email;
-            }
-          }
+        if (admin) {
+          representativeid = admin.email;
         }
       }
 
@@ -108,7 +76,7 @@ export const createapplication = async (req, res) => {
       const shortid = newApplicationId.slice(3, 12).replace(/-/g, ""); // remove hyphens
       const newPayload = {
         ...updatePayload,
-        representativeid,
+        representativeid, // This will be undefined if not set above
         applicationId: shortid,
         createdAt: new Date(),
       };
@@ -117,7 +85,7 @@ export const createapplication = async (req, res) => {
 
       return res.status(200).json({
         message: "Application created successfully",
-        applicationId: newApplicationId,
+        applicationId: shortid, // Fixed: return shortid instead of newApplicationId
       });
     }
   } catch (error) {

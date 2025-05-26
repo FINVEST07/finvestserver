@@ -127,20 +127,41 @@ export const getAdmins = async (req, res) => {
 
 export const addAdmin = async (req, res) => {
   try {
-    const { fullName, adminname, email, mobile, rank, adminId } =
+    const { fullName, adminname, email, mobile, rank, adminId, location } =
       req.body.payload;
     const update = req.body.update;
     const data = req.body.payload;
 
     // Validation: either fullName or adminname must be present, along with other required fields
-    if ((!fullName && !adminname) || !email || !mobile || !rank) {
+    // Check for missing required fields and collect their names
+    const missingFields = [];
+
+    if (!fullName && !adminname) {
+      missingFields.push("fullName or adminname");
+    }
+    if (!email) {
+      missingFields.push("email");
+    }
+    if (!mobile) {
+      missingFields.push("mobile");
+    }
+    if (!rank) {
+      missingFields.push("rank");
+    }
+
+    if (!location) {
+      missingFields.push("location");
+    }
+
+    if (missingFields.length > 0) {
       return res.status(400).json({
         status: false,
         message: "Required Fields are Missing",
+        missingFields: missingFields,
       });
     }
 
-    // For updates, adminId is required
+    // For updates, email is required (fixed the condition)
     if (update && !email) {
       return res.status(400).json({
         status: false,
@@ -177,12 +198,27 @@ export const addAdmin = async (req, res) => {
         }
       }
 
+      // Check if location is being changed and if another admin has authority over this location
+      if (location !== existingAdmin.location) {
+        const locationAdmin = await db
+          .collection("admin")
+          .findOne({ location: location, email: { $ne: email } });
+
+        if (locationAdmin) {
+          return res.status(400).json({
+            status: false,
+            message: `Another employee or partner (${locationAdmin.adminname}) already has authority over this location`,
+          });
+        }
+      }
+
       // Prepare update data
       const updateData = {
         adminname: finalAdminName,
         email,
         mobile,
         rank,
+        location: location,
         password: existingAdmin.password,
       };
 
@@ -211,6 +247,18 @@ export const addAdmin = async (req, res) => {
         });
       }
 
+      // Check if another admin already has authority over this location
+      const locationAdmin = await db
+        .collection("admin")
+        .findOne({ location: location });
+
+      if (locationAdmin) {
+        return res.status(400).json({
+          status: false,
+          message: `Another employee or partner (${locationAdmin.adminname}) already has authority over this location`,
+        });
+      }
+
       // Generate password
       const name = finalAdminName.slice(0, 4).toUpperCase();
       const number = mobile.slice(6, 10);
@@ -222,12 +270,13 @@ export const addAdmin = async (req, res) => {
         email,
         mobile,
         rank,
+        location,
         password,
       });
 
-      // Delete the application request
+      // Delete the application request (fixed the condition)
       await db.collection("applications").deleteOne({
-        servicetype: "4" || 4,
+        servicetype: { $in: ["4", 4] },
         email: email,
       });
 
