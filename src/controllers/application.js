@@ -76,7 +76,9 @@ export const createapplication = async (req, res) => {
       const shortid = newApplicationId.slice(3, 12).replace(/-/g, ""); // remove hyphens
       const newPayload = {
         ...updatePayload,
-        representativeid, // This will be undefined if not set above
+        representativeid,
+        stars : 5,
+        // This will be undefined if not set above
         applicationId: shortid,
         createdAt: new Date(),
       };

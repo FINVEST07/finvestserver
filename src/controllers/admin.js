@@ -349,3 +349,61 @@ export const deleteEmloyeePartner = async (req, res) => {
     });
   }
 };
+
+export const ResetAdminPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body.payload;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        message: "Required Fields are Missing",
+        status: false,
+      });
+    }
+
+    const db = mongoose.connection.db;
+
+    const admin = await db.collection("login").findOne({ email });
+
+    if (!admin) {
+      return res
+        .status(404)
+        .json({ message: "OTP not found. Please request a new one." });
+    }
+
+    const isOtpMatch = admin.otp === otp;
+    const now = new Date();
+    const timeDiff = (now - admin.otpGeneratedAt) / 1000; // in seconds
+
+
+    if (!isOtpMatch) {
+      return res.status(401).json({ status: false, message: "Incorrect OTP" });
+    }
+
+
+    if (timeDiff > 120) {
+      return res.status(410).json({
+        status: false,
+        message: "OTP has expired. Please request a new one.",
+      });
+    }
+
+    // OTP is valid and within 2 minutes
+    // Optional: delete OTP record after use
+    await db.collection("login").deleteOne({ email });
+
+    await db
+      .collection("admin")
+      .updateOne({ email: email }, { $set: { password: newPassword } });
+
+    return res.status(200).json({
+      message: "Password Reset Successfully",
+      status: true,
+    });
+  } catch (error) {
+    console.error("Error in LoginwithOtp:", error);
+    return res
+      .status(500)
+      .json({ status: false, message: "Internal Server Error" });
+  }
+};

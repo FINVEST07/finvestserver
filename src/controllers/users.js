@@ -103,12 +103,10 @@ export const verifyotp = async (req, res) => {
     }
 
     if (!user.otp || !user.otpGeneratedAt) {
-      return res
-        .status(400)
-        .json({
-          status: false,
-          message: "No OTP found. Please request a new one.",
-        });
+      return res.status(400).json({
+        status: false,
+        message: "No OTP found. Please request a new one.",
+      });
     }
 
     // Check if OTP has expired (10 minutes expiry)
@@ -135,13 +133,11 @@ export const verifyotp = async (req, res) => {
       }
     );
 
-    return res
-      .status(200)
-      .json({
-        message: "OTP verified successfully",
-        name: user.name,
-        status: true,
-      });
+    return res.status(200).json({
+      message: "OTP verified successfully",
+      name: user.name,
+      status: true,
+    });
   } catch (error) {
     console.error("Verify OTP Error:", error);
     return res
@@ -254,12 +250,10 @@ export const LoginwithOtp = async (req, res) => {
     }
 
     if (timeDiff > 120) {
-      return res
-        .status(410)
-        .json({
-          status: false,
-          message: "OTP has expired. Please request a new one.",
-        });
+      return res.status(410).json({
+        status: false,
+        message: "OTP has expired. Please request a new one.",
+      });
     }
 
     // OTP is valid and within 2 minutes
@@ -349,5 +343,145 @@ export const getUsers = async (req, res) => {
     return res.status(500).json({
       message: "Internal Server Error",
     });
+  }
+};
+
+const sendforgototp = async (email) => {
+  try {
+    if (!email) {
+      return res.status(400).json({ message: "No email provided" });
+    }
+
+    // Generate 6-digit numeric OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const { data, error } = await resend.emails.send({
+      from: "FINVESTCORP <no-reply@t-rexinfotech.in>",
+      to: [email],
+      subject: "OTP For Reset Password",
+      html: `<p>Your OTP is: <strong>${otp}</strong>. It is valid for 2 minutes.</p>`,
+    });
+
+    if (error) {
+      throw new Error({ message: "Failed to send OTP", error });
+    }
+
+    return otp;
+  } catch (error) {
+    console.error("Send OTP Error:", error);
+    throw new Error({ message: "Internal Server Error" });
+  }
+};
+
+export const sendforgotpasswordotp = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const db = mongoose.connection.db;
+
+    if (!email || typeof email !== "string") {
+      return res.status(400).json({
+        message: "Invalid or missing email",
+      });
+    }
+
+    const checkuser = await db.collection("users").findOne({
+      email: email,
+    });
+
+    if (!checkuser) {
+      return res.status(404).json({
+        message: "No user Found with this email",
+      });
+    }
+
+    const otp = await sendforgototp(email);
+
+    if (!otp) {
+      return res.status(500).json({
+        message: "Unable to generate OTP, please try again later",
+      });
+    }
+
+    // Optional: remove previous OTPs for the same email
+    await db.collection("login").deleteMany({ email });
+
+    // Insert new OTP record
+    await db.collection("login").insertOne({
+      email,
+      otp,
+      otpGeneratedAt: new Date(),
+    });
+
+    return res.status(200).json({
+      message: "OTP generated successfully",
+    });
+  } catch (error) {
+    console.error("Error in SendLoginOtp:", error);
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+};
+
+export const ResetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    console.log(email, otp, newPassword);
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        message: "Required Fields are Missing",
+        status: false,
+      });
+    }
+
+    const db = mongoose.connection.db;
+
+    const user = await db.collection("login").findOne({ email });
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ message: "OTP not found. Please request a new one." });
+    }
+
+    const isOtpMatch = user.otp === otp;
+    const now = new Date();
+    const timeDiff = (now - user.otpGeneratedAt) / 1000; // in seconds
+
+    if (!isOtpMatch) {
+      return res.status(401).json({ status: false, message: "Incorrect OTP" });
+    }
+
+    if (timeDiff > 120) {
+      return res.status(410).json({
+        status: false,
+        message: "OTP has expired. Please request a new one.",
+      });
+    }
+
+    // OTP is valid and within 2 minutes
+    // Optional: delete OTP record after use
+    await db.collection("login").deleteOne({ email });
+
+    await db
+      .collection("users")
+      .updateOne({ email: email }, { $set: { password: newPassword } });
+
+    // user extracted from user collection
+    const newuser = await db.collection("users").findOne({ email });
+
+    return res.status(200).json({
+      message: "Password Reset Successfully",
+      mobile: newuser.mobile,
+      status: true,
+    });
+  } catch (error) {
+    console.error("Error in LoginwithOtp:", error);
+    return res
+      .status(500)
+      .json({ status: false, message: "Internal Server Error" });
   }
 };

@@ -5,6 +5,8 @@ import {
   getUsers,
   LoginPassword,
   LoginwithOtp,
+  ResetPassword,
+  sendforgotpasswordotp,
   SendLoginOtp,
   verifyotp,
 } from "./controllers/users.js";
@@ -21,6 +23,7 @@ import {
   deleteEmloyeePartner,
   getAdmins,
   getPartnerandEmployeeApplications,
+  ResetAdminPassword,
 } from "./controllers/admin.js";
 import { addVisitor, getDashboardNumbers } from "./controllers/visitors.js";
 import {
@@ -38,6 +41,7 @@ const approuter = Router();
 
 approuter.post("/api/adduser", adduser);
 approuter.post("/api/verifyotp", verifyotp);
+approuter;
 
 approuter.get("/api/getuser", getsingleuser);
 approuter.post("/api/sendloginotp", SendLoginOtp);
@@ -78,5 +82,13 @@ approuter.get("/api/getcities", GetCities);
 
 //Enquiry Routes
 approuter.post("/api/sendenquiry", SendEnquiry);
+
+//Forgot PassWord
+approuter.post("/api/sendforgotpasswordotp",sendforgotpasswordotp);
+
+approuter.post("/api/resetpassword",ResetPassword);
+
+approuter.post("/api/resetadminpassword",ResetAdminPassword);
+
 
 export default approuter;
