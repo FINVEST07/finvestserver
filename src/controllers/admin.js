@@ -195,16 +195,18 @@ export const addAdmin = async (req, res) => {
       }
 
       // Check if location is being changed and if another admin has authority over this location
-      if (location !== existingAdmin.location) {
-        const locationAdmin = await db
-          .collection("admin")
-          .findOne({ location: location, email: { $ne: email } });
+      if (location != "") {
+        if (location !== existingAdmin.location) {
+          const locationAdmin = await db
+            .collection("admin")
+            .findOne({ location: location, email: { $ne: email } });
 
-        if (locationAdmin) {
-          return res.status(400).json({
-            status: false,
-            message: `Another employee or partner (${locationAdmin.adminname}) already has authority over this location`,
-          });
+          if (locationAdmin) {
+            return res.status(400).json({
+              status: false,
+              message: `Another employee or partner (${locationAdmin.adminname}) already has authority over this location`,
+            });
+          }
         }
       }
 
