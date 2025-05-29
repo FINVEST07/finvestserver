@@ -127,7 +127,7 @@ export const getAdmins = async (req, res) => {
 
 export const addAdmin = async (req, res) => {
   try {
-    const { fullName, adminname, email, mobile, rank, adminId, location } =
+    const { fullName, adminname, email, mobile, rank, location, city } =
       req.body.payload;
     const update = req.body.update;
     const data = req.body.payload;
@@ -147,10 +147,6 @@ export const addAdmin = async (req, res) => {
     }
     if (!rank) {
       missingFields.push("rank");
-    }
-
-    if (!location) {
-      missingFields.push("location");
     }
 
     if (missingFields.length > 0) {
@@ -272,6 +268,7 @@ export const addAdmin = async (req, res) => {
         rank,
         location,
         password,
+        city: city,
       });
 
       // Delete the application request (fixed the condition)
@@ -375,11 +372,9 @@ export const ResetAdminPassword = async (req, res) => {
     const now = new Date();
     const timeDiff = (now - admin.otpGeneratedAt) / 1000; // in seconds
 
-
     if (!isOtpMatch) {
       return res.status(401).json({ status: false, message: "Incorrect OTP" });
     }
-
 
     if (timeDiff > 120) {
       return res.status(410).json({

@@ -60,6 +60,7 @@ approuter.post("/api/adminlogin", adminlogin);
 approuter.post("/api/addadmin", addAdmin);
 approuter.get("/api/getadmins", getAdmins);
 
+
 // visitor routes
 approuter.post("/api/addvisitor", addVisitor);
 approuter.get("/api/getusers", getUsers);
