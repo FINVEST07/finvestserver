@@ -64,7 +64,9 @@ export const createapplication = async (req, res) => {
       // Fixed condition logic - use AND (&&) instead of OR (||)
       if (validData.servicetype != "4" && validData.servicetype != 4) {
         // Fixed await for async operation
-        const admin = await db.collection("admin").findOne({ location: validData.location });
+        const admin = await db
+          .collection("admin")
+          .findOne({ location: validData.location });
 
         if (admin) {
           representativeid = admin.email;
@@ -77,7 +79,7 @@ export const createapplication = async (req, res) => {
       const newPayload = {
         ...updatePayload,
         representativeid,
-        stars : 5,
+        stars: 5,
         // This will be undefined if not set above
         applicationId: shortid,
         createdAt: new Date(),
@@ -160,7 +162,6 @@ export const getApplications = async (req, res) => {
   }
 };
 
-
 export const getApplicationCustomers = async (req, res) => {
   try {
     const rank = req.query.rank;
@@ -208,7 +209,6 @@ export const getApplicationCustomers = async (req, res) => {
   }
 };
 
-
 export const handleComplete = async (req, res) => {
   try {
     const { applicationId } = req.body;
@@ -222,12 +222,15 @@ export const handleComplete = async (req, res) => {
 
     const db = mongoose.connection.db;
 
-    const result = await db
-      .collection("applications")
-      .updateOne(
-        { applicationId: applicationId },
-        { $set: { status: "Completed" } }
-      );
+    const result = await db.collection("applications").updateOne(
+      { applicationId: applicationId },
+      {
+        $set: {
+          status: "Completed",
+          closingTime: new Date(),
+        },
+      }
+    );
 
     if (result.modifiedCount === 0) {
       return res.status(404).json({
@@ -284,6 +287,46 @@ export const ForwardApplication = async (req, res) => {
 
     return res.status(500).json({
       message: "Internal server error",
+      status: false,
+    });
+  }
+};
+
+export const AddAppraisal = async (req, res) => {
+  try {
+    const { applicationId, appraisal } = req.body;
+
+    if (!applicationId || !appraisal) {
+      return res.status(400).json({
+        message: "Required Fields are Missing",
+        status: false,
+      });
+    }
+
+    const db = mongoose.connection.db;
+
+    const result = await db
+      .collection("applications")
+      .updateOne(
+        { applicationId: applicationId },
+        { $set: { appraisal: appraisal } }
+      );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({
+        message: "Application not found or no changes made",
+        status: false,
+      });
+    }
+
+    return res.status(200).json({
+      message: "Submitted Successfully",
+      status: true,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: "Internal Server Error",
       status: false,
     });
   }

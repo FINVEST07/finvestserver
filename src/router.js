@@ -33,6 +33,7 @@ import {
   getApplications,
   handleComplete,
   ForwardApplication,
+  AddAppraisal,
 } from "./controllers/application.js";
 import { GetCities } from "./controllers/cities.js";
 import { SendEnquiry } from "./controllers/enquiry.js";
@@ -75,10 +76,11 @@ approuter.get(
 approuter.post("/api/completeapplication", handleComplete);
 approuter.post("/api/deleteemloyeepartner", deleteEmloyeePartner);
 approuter.post("/api/forwardapplication", ForwardApplication);
+approuter.post("/api/addappraisal",AddAppraisal);
+
 
 //Dashboard Routes
 approuter.get("/api/getdashboardnumbers", getDashboardNumbers);
-
 approuter.get("/api/getcities", GetCities);
 
 //Enquiry Routes
