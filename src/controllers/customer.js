@@ -27,7 +27,7 @@ export const CreateCustomer = async (req, res) => {
       .findOne({}, { sort: { customer_id: -1 } });
 
     // Set broker ID (auto-increment starting from 100001)
-    const customer_id = `${Lastcustomer ? Lastcustomer.customer_id + 1 : 100001}`;
+    const customer_id = Lastcustomer ? Lastcustomer.customer_id + 1 : 100001;
 
     data.customer_id = customer_id;
     data.createdAt = new Date();
