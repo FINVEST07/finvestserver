@@ -331,3 +331,35 @@ export const AddAppraisal = async (req, res) => {
     });
   }
 };
+
+export const UpdateApplicationStatus = async (req, res) => {
+  try {
+    const { applicationId, status } = req.body;
+
+    if (!applicationId || !status) {
+      return res.status(400).json({
+        message: "Required Fields are missing",
+        status: false,
+      });
+    }
+
+    const db = mongoose.connection.db;
+
+    await db
+      .collection("applications")
+      .updateOne(
+        { applicationId: applicationId },
+        { $set: { status: status } }
+      );
+
+    return res.status(200).json({
+      message: "Application Updated Successful",
+      status: true,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: "Internal Server Error",
+    });
+  }
+};

@@ -34,6 +34,7 @@ import {
   handleComplete,
   ForwardApplication,
   AddAppraisal,
+  UpdateApplicationStatus,
 } from "./controllers/application.js";
 import { GetCities } from "./controllers/cities.js";
 import { SendEnquiry } from "./controllers/enquiry.js";
@@ -77,6 +78,7 @@ approuter.post("/api/completeapplication", handleComplete);
 approuter.post("/api/deleteemloyeepartner", deleteEmloyeePartner);
 approuter.post("/api/forwardapplication", ForwardApplication);
 approuter.post("/api/addappraisal",AddAppraisal);
+approuter.post("/api/updateapplicationstatus",UpdateApplicationStatus);
 
 
 //Dashboard Routes
