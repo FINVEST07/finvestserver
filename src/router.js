@@ -16,6 +16,7 @@ import {
   getCustomers,
   getSingleCustomer,
   savecustomer,
+  DeleteDocument,
 } from "./controllers/customer.js";
 import {
   addAdmin,
@@ -56,6 +57,7 @@ approuter.post("/api/savecustomer", uploadMiddleware, savecustomer);
 approuter.get("/api/getcustomers", getCustomers);
 approuter.get("/api/getapplicationcustomers", getApplicationCustomers);
 approuter.post("/api/createapplication", uploadMiddleware, createapplication);
+approuter.post("/api/deletedocument", DeleteDocument);
 
 // admin routes
 approuter.post("/api/adminlogin", adminlogin);
