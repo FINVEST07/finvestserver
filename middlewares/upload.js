@@ -47,15 +47,29 @@ const uploadBase64ToCloudinary = async (base64Data, fieldName, fileInfo = {}) =>
     }
 
     const resourceType = getResourceType(mimeType);
+    const timestamp = Date.now();
+    const isPdf = (resourceType === 'raw' && (mimeType === 'application/pdf'));
+    const publicId = `${fieldName}_${timestamp}`; // keep id clean; use format for extension
     
-    const uploadResult = await cloudinary.uploader.upload(
-      `data:${mimeType};base64,${cleanBase64}`,
-      {
-        folder: "documents",
-        resource_type: resourceType,
-        public_id: `${fieldName}_${Date.now()}`,
-      }
-    );
+    // Decode base64 into a Buffer
+    const fileBuffer = Buffer.from(cleanBase64, 'base64');
+
+    // Upload via stream for reliability (prevents zero-byte PDFs)
+    const uploadResult = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: "documents",
+          resource_type: resourceType,
+          public_id: publicId,
+          ...(isPdf ? { format: 'pdf' } : {}),
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
+        }
+      );
+      streamifier.createReadStream(fileBuffer).pipe(stream);
+    });
 
     return {
       field: fieldName,
@@ -76,12 +90,16 @@ const uploadBase64ToCloudinary = async (base64Data, fieldName, fileInfo = {}) =>
 const uploadBufferToCloudinary = (file) => {
   return new Promise((resolve, reject) => {
     const resourceType = getResourceType(file.mimetype);
+    const timestamp = Date.now();
+    const isPdf = (resourceType === 'raw' && (file.mimetype === 'application/pdf'));
+    const publicId = `${file.fieldname}_${timestamp}`; // keep id clean; use format for extension
     
     const stream = cloudinary.uploader.upload_stream(
       { 
         folder: "documents",
         resource_type: resourceType,
-        public_id: `${file.fieldname}_${Date.now()}`
+        public_id: publicId,
+        ...(isPdf ? { format: 'pdf' } : {}),
       },
       (error, result) => {
         if (error) return reject(error);

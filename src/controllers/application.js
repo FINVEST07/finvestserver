@@ -42,6 +42,12 @@ export const createapplication = async (req, res) => {
       ...imageFields,
     };
 
+    // If applyMode requests a new application, ignore any passed applicationId
+    if (data.applyMode === 'new') {
+      delete data.applicationId;
+      delete updatePayload.applicationId;
+    }
+
     // Check if applicationId exists in data
     if (data.applicationId) {
       // Update existing document
