@@ -40,7 +40,23 @@ export const getSitemap = async (req, res) => {
       { loc: `${baseUrl}/gallery`, changefreq: "weekly", priority: 0.6 }
     ];
 
-    let urlsXml = staticUrls
+    // Keyword info pages under /info/:slug
+    const infoSlugs = [
+      'home-loan-agent','home-loan-consultant','home-loan-dsa','home-loan-advisor',
+      'mortgage-loan-agent','mortgage-loan-consultant','mortgage-loan-dsa','mortgage-loan-advisor',
+      'cgtmse-agent','cgtmse-consultant','cgtmse-dsa','cgtmse-advisor',
+      'msme-loan-agent','msme-loan-consultant','msme-loan-dsa','msme-loan-advisor',
+      'business-loan-agent','business-loan-consultant','business-loan-dsa','business-loan-advisor',
+      'personal-loan-agent','personal-loan-consultant','personal-loan-dsa','personal-loan-advisor',
+      'life-insurance-agent','life-insurance-consultant','life-insurance-advisor',
+      'health-insurance-agent','health-insurance-consultant','health-insurance-advisor',
+      'mutual-fund-agent','mutual-fund-consultant','mutual-fund-advisor','mutual-fund-distributor',
+      'auction-property-advisor','auction-property-consultant'
+    ];
+    const infoUrls = infoSlugs.map((s) => ({ loc: `${baseUrl}/info/${s}`, changefreq: 'monthly', priority: 0.6 }));
+    const allStatic = staticUrls.concat(infoUrls);
+
+    let urlsXml = allStatic
       .map(
         (u) => `  <url>\n    <loc>${u.loc}</loc>\n    <changefreq>${u.changefreq}</changefreq>\n    <priority>${u.priority}</priority>\n  </url>`
       )

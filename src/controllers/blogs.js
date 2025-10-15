@@ -4,23 +4,6 @@ import { v2 as cloudinary } from "cloudinary";
 export const getBlogs = async (req, res) => {
   try {
     const db = mongoose.connection.db;
-
-    // Generate unique slug from title
-    const slugify = (str) =>
-      str
-        .toString()
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .replace(/\s+/g, "-")
-        .replace(/-+/g, "-");
-
-    let baseSlug = slugify(title);
-    let slug = baseSlug;
-    const exists = await db.collection("blogs").findOne({ slug });
-    if (exists) {
-      slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
-    }
     const blogs = await db
       .collection("blogs")
       .find({})
