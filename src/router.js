@@ -11,8 +11,9 @@ import {
   verifyotp,
 } from "./controllers/users.js";
 import uploadMiddleware, { singleupload } from "../middlewares/upload.js";
-import { getBlogs, createBlog } from "./controllers/blogs.js";
-import { getMedia, createMedia } from "./controllers/media.js";
+import { getBlogs, createBlog, deleteBlog, getBlogById, getBlogBySlug } from "./controllers/blogs.js";
+import { getMedia, createMedia, deleteMedia } from "./controllers/media.js";
+import { getSitemap } from "./controllers/sitemap.js";
 import {
   CreateCustomer,
   getCustomers,
@@ -101,11 +102,18 @@ approuter.post("/api/resetadminpassword",ResetAdminPassword);
 
 // Blogs routes
 approuter.get("/api/blogs", getBlogs);
+approuter.get("/api/blogs/slug/:slug", getBlogBySlug);
+approuter.get("/api/blogs/:id", getBlogById);
 approuter.post("/api/blogs", uploadMiddleware, createBlog);
+approuter.delete("/api/blogs/:id", deleteBlog);
 
 // Media routes
 approuter.get("/api/media", getMedia);
 approuter.post("/api/media", singleupload, createMedia);
+approuter.delete("/api/media/:id", deleteMedia);
+
+// Dynamic sitemap
+approuter.get("/sitemap.xml", getSitemap);
 
 
 export default approuter;
