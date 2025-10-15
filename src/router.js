@@ -10,7 +10,9 @@ import {
   SendLoginOtp,
   verifyotp,
 } from "./controllers/users.js";
-import uploadMiddleware from "../middlewares/upload.js";
+import uploadMiddleware, { singleupload } from "../middlewares/upload.js";
+import { getBlogs, createBlog } from "./controllers/blogs.js";
+import { getMedia, createMedia } from "./controllers/media.js";
 import {
   CreateCustomer,
   getCustomers,
@@ -96,6 +98,14 @@ approuter.post("/api/sendforgotpasswordotp",sendforgotpasswordotp);
 approuter.post("/api/resetpassword",ResetPassword);
 
 approuter.post("/api/resetadminpassword",ResetAdminPassword);
+
+// Blogs routes
+approuter.get("/api/blogs", getBlogs);
+approuter.post("/api/blogs", uploadMiddleware, createBlog);
+
+// Media routes
+approuter.get("/api/media", getMedia);
+approuter.post("/api/media", singleupload, createMedia);
 
 
 export default approuter;
