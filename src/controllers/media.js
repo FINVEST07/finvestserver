@@ -21,7 +21,7 @@ export const getMedia = async (req, res) => {
 
 export const createMedia = async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text, label } = req.body;
 
     if (!req.imageUrl) {
       return res
@@ -34,6 +34,7 @@ export const createMedia = async (req, res) => {
     const payload = {
       url: req.imageUrl,
       text: text || "",
+      label: label || text || "",
       public_id: req.uploadInfo?.public_id || null,
       createdAt: new Date(),
     };
