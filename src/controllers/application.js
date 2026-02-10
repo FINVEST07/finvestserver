@@ -1,5 +1,8 @@
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid"; // install via npm if not added: npm install uuid
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY || "re_ccuAZtfq_qWsMFDrWjLSwX1vt6qm5GFCp");
 
 export const createapplication = async (req, res) => {
   try {
@@ -92,6 +95,34 @@ export const createapplication = async (req, res) => {
       };
 
       await db.collection("applications").insertOne(newPayload);
+
+      try {
+        const officeemail = process.env.ADMIN_NOTIFICATION_EMAIL || "officefinvestcorp@gmail.com";
+        const subjectParts = [
+          "New Service Application",
+          newPayload?.servicename ? `for ${newPayload.servicename}` : null,
+          newPayload?.location ? `(${newPayload.location})` : null,
+        ].filter(Boolean);
+
+        await resend.emails.send({
+          from: "FINVESTCORP <no-reply@t-rexinfotech.in>",
+          to: [officeemail],
+          subject: subjectParts.join(" "),
+          html: `
+            <p>A new customer has applied for a service.</p>
+            <p><strong>Application ID:</strong> ${newPayload.applicationId}</p>
+            <p><strong>Service:</strong> ${newPayload.servicename || "-"}</p>
+            <p><strong>Service Type:</strong> ${newPayload.servicetype || "-"}</p>
+            <p><strong>Name:</strong> ${newPayload.name || "-"}</p>
+            <p><strong>Email:</strong> ${newPayload.email || "-"}</p>
+            <p><strong>Mobile:</strong> ${newPayload.mobile || "-"}</p>
+            <p><strong>City:</strong> ${newPayload.city || "-"}</p>
+            <p><strong>Location:</strong> ${newPayload.location || "-"}</p>
+          `,
+        });
+      } catch (mailError) {
+        console.error("Admin notification email failed:", mailError);
+      }
 
       return res.status(200).json({
         message: "Application created successfully",

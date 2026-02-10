@@ -11,7 +11,7 @@ import {
   verifyotp,
 } from "./controllers/users.js";
 import uploadMiddleware, { singleupload } from "../middlewares/upload.js";
-import { getBlogs, createBlog, deleteBlog, getBlogById, getBlogBySlug } from "./controllers/blogs.js";
+import { getBlogs, createBlog, deleteBlog, getBlogById, getBlogBySlug, updateBlog } from "./controllers/blogs.js";
 import { getMedia, createMedia, deleteMedia } from "./controllers/media.js";
 import { getSitemap } from "./controllers/sitemap.js";
 import {
@@ -105,6 +105,7 @@ approuter.get("/api/blogs", getBlogs);
 approuter.get("/api/blogs/slug/:slug", getBlogBySlug);
 approuter.get("/api/blogs/:id", getBlogById);
 approuter.post("/api/blogs", uploadMiddleware, createBlog);
+approuter.put("/api/blogs/:id", uploadMiddleware, updateBlog);
 approuter.delete("/api/blogs/:id", deleteBlog);
 
 // Media routes
