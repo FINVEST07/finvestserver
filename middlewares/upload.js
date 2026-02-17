@@ -25,6 +25,8 @@ const upload = multer({
 const getResourceType = (mimeType) => {
   if (mimeType === 'application/pdf') {
     return 'raw';
+  } else if (mimeType && mimeType.startsWith('video/')) {
+    return 'video';
   } else if (mimeType && mimeType.startsWith('image/')) {
     return 'image';
   }
@@ -32,7 +34,12 @@ const getResourceType = (mimeType) => {
 };
 
 // Helper function to upload base64 data to Cloudinary
-const uploadBase64ToCloudinary = async (base64Data, fieldName, fileInfo = {}) => {
+const uploadBase64ToCloudinary = async (
+  base64Data,
+  fieldName,
+  fileInfo = {},
+  options = {}
+) => {
   try {
     // Extract base64 content if it has data URL prefix
     let cleanBase64 = base64Data;
@@ -58,7 +65,7 @@ const uploadBase64ToCloudinary = async (base64Data, fieldName, fileInfo = {}) =>
     const uploadResult = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         {
-          folder: "documents",
+          folder: options.folder || "documents",
           resource_type: resourceType,
           public_id: publicId,
           ...(isPdf ? { format: 'pdf' } : {}),
@@ -216,23 +223,31 @@ export const singleupload = (req, res, next) => {
     limits: {
       fileSize: 50 * 1024 * 1024, // 50MB
     }
-  }).single("image");
+  }).fields([
+    { name: "file", maxCount: 1 },
+    { name: "image", maxCount: 1 },
+  ]);
 
   uploadSingle(req, res, async (err) => {
     if (err) {
       return res.status(400).json({ message: "Multer error: " + err.message });
     }
 
+    const incomingFile =
+      (req.files && req.files.file && req.files.file[0]) ||
+      (req.files && req.files.image && req.files.image[0]) ||
+      null;
+
     // Handle traditional file upload
-    if (req.file) {
+    if (incomingFile) {
       try {
-        const resourceType = getResourceType(req.file.mimetype);
+        const resourceType = getResourceType(incomingFile.mimetype);
         
         const uploadResult = await new Promise((resolve, reject) => {
           cloudinary.uploader
             .upload_stream(
               { 
-                folder: "images",
+                folder: "media",
                 resource_type: resourceType 
               }, 
               (error, result) => {
@@ -240,10 +255,10 @@ export const singleupload = (req, res, next) => {
                 resolve(result);
               }
             )
-            .end(req.file.buffer);
+            .end(incomingFile.buffer);
         });
         
-        req.imageUrl = uploadResult.secure_url;
+        req.mediaUrl = uploadResult.secure_url;
         req.uploadInfo = {
           url: uploadResult.secure_url,
           public_id: uploadResult.public_id,
@@ -260,9 +275,9 @@ export const singleupload = (req, res, next) => {
     }
 
     // Handle base64 data in request body
-    if (req.body.image) {
+    if (req.body.file || req.body.image) {
       try {
-        let imageData = req.body.image;
+        let imageData = req.body.file || req.body.image;
         let fileInfo = {};
         
         // Handle object format
@@ -271,14 +286,19 @@ export const singleupload = (req, res, next) => {
           imageData = imageData.content;
         }
         
-        const uploadResult = await uploadBase64ToCloudinary(imageData, 'image', fileInfo);
-        req.imageUrl = uploadResult.url;
+        const uploadResult = await uploadBase64ToCloudinary(
+          imageData,
+          'file',
+          fileInfo,
+          { folder: 'media' }
+        );
+        req.mediaUrl = uploadResult.url;
         req.uploadInfo = uploadResult;
         
         next();
       } catch (error) {
         console.error("Base64 upload error:", error);
-        res.status(500).json({ message: "Image upload failed" });
+        res.status(500).json({ message: "Media upload failed" });
       }
     } else {
       res.status(400).json({ message: "No file uploaded" });

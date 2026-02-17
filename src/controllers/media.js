@@ -23,19 +23,20 @@ export const createMedia = async (req, res) => {
   try {
     const { text, label } = req.body;
 
-    if (!req.imageUrl) {
+    if (!req.mediaUrl) {
       return res
         .status(400)
-        .json({ status: false, message: "Image is required" });
+        .json({ status: false, message: "File is required" });
     }
 
     const db = mongoose.connection.db;
 
     const payload = {
-      url: req.imageUrl,
+      url: req.mediaUrl,
       text: text || "",
       label: label || text || "",
       public_id: req.uploadInfo?.public_id || null,
+      resource_type: req.uploadInfo?.resource_type || null,
       createdAt: new Date(),
     };
 
@@ -65,7 +66,8 @@ export const deleteMedia = async (req, res) => {
 
     if (existing.public_id) {
       try {
-        await cloudinary.uploader.destroy(existing.public_id, { resource_type: "image" });
+        const resourceType = existing.resource_type || "image";
+        await cloudinary.uploader.destroy(existing.public_id, { resource_type: resourceType });
       } catch (e) {
         console.error("Cloudinary destroy error (media)", e);
       }

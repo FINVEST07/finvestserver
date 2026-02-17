@@ -41,7 +41,7 @@ import {
   UpdateApplicationStatus,
 } from "./controllers/application.js";
 import { GetCities } from "./controllers/cities.js";
-import { SendEnquiry } from "./controllers/enquiry.js";
+import { GetEnquiries, SendEnquiry } from "./controllers/enquiry.js";
 
 const approuter = Router();
 
@@ -92,6 +92,7 @@ approuter.get("/api/getcities", GetCities);
 
 //Enquiry Routes
 approuter.post("/api/sendenquiry", SendEnquiry);
+approuter.get("/api/getenquiries", GetEnquiries);
 
 //Forgot PassWord
 approuter.post("/api/sendforgotpasswordotp",sendforgotpasswordotp);
