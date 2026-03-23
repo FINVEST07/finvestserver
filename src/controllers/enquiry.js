@@ -1,12 +1,14 @@
 import mongoose from "mongoose";
-import { Resend } from "resend";
-
-const resend = new Resend(
-  process.env.RESEND_API_KEY || "re_ccuAZtfq_qWsMFDrWjLSwX1vt6qm5GFCp"
-);
+import {
+  normalizeReceiverNumber,
+  sendWhatsappMessage,
+  sleep,
+} from "../utils/whatsapp.js";
 
 export const SendEnquiry = async (req, res) => {
   try {
+    console.log("[SendEnquiry] Received enquiry");
+
     const {
       name,
       email,
@@ -38,30 +40,69 @@ export const SendEnquiry = async (req, res) => {
       });
     }
 
-    const officeemail = "officefinvestcorp@gmail.com";
+    const instituteName = process.env.INSTITUTE_NAME || "FINVESTCORP";
+    const instituteContact = process.env.INSTITUTE_CONTACT || "";
+    const adminNumber = normalizeReceiverNumber(process.env.ADMIN_WHATSAPP_NUMBER);
+    const userNumber = normalizeReceiverNumber(normalizedMobile);
 
-    const { error } = await resend.emails.send({
-      from: "FINVESTCORP <no-reply@t-rexinfotech.in>",
-      to: [officeemail],
-      subject: `New Enquiry - ${normalizedService} (${normalizedCity})`,
-      html: `
-        <p>A new enquiry has been submitted.</p>
-        <p><strong>Name:</strong> ${normalizedName}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Mobile:</strong> ${normalizedMobile}</p>
-        <p><strong>City:</strong> ${normalizedCity}</p>
-        <p><strong>Service:</strong> ${normalizedService}</p>
-        <p><strong>Amount:</strong> ${normalizedAmount}</p>
-        <p><strong>Referral Code:</strong> ${normalizedReferralCode}</p>
-        <p><strong>Message:</strong> ${normalizedMessage}</p>
-      `,
-    });
-
-    if (error) {
+    if (!adminNumber) {
+      console.error("[SendEnquiry] ADMIN_WHATSAPP_NUMBER is missing/invalid");
       return res.status(500).json({
         message: "Erorr sending enquiry",
         status: false,
       });
+    }
+
+    const adminMessage =
+      `New Enquiry (${instituteName})\n\n` +
+      `Name: ${normalizedName}\n` +
+      `Email: ${email}\n` +
+      `Mobile: ${normalizedMobile}\n` +
+      `City: ${normalizedCity}\n` +
+      `Service: ${normalizedService}\n` +
+      `Amount: ${normalizedAmount}\n` +
+      `Referral Code: ${normalizedReferralCode}\n` +
+      `Message: ${normalizedMessage}`;
+
+    console.log("[SendEnquiry] Sending admin WhatsApp message");
+    try {
+      await sendWhatsappMessage({
+        number: adminNumber,
+        message: adminMessage,
+      });
+      console.log("[SendEnquiry] Admin WhatsApp message sent");
+    } catch (err) {
+      console.error("[SendEnquiry] Failed to send admin WhatsApp message:", err);
+      return res.status(500).json({
+        message: "Erorr sending enquiry",
+        status: false,
+      });
+    }
+
+    if (userNumber) {
+      const userMessage =
+        `Hi ${normalizedName},\n\n` +
+        `We have received your enquiry at ${instituteName}. Our team will get back to you shortly.\n\n` +
+        (instituteContact ? `Contact: ${instituteContact}` : "");
+
+      console.log("[SendEnquiry] Sending user WhatsApp confirmation");
+      try {
+        await sleep(400);
+        await sendWhatsappMessage({
+          number: userNumber,
+          message: userMessage,
+        });
+        console.log("[SendEnquiry] User WhatsApp confirmation sent");
+      } catch (err) {
+        console.error(
+          "[SendEnquiry] Failed to send user WhatsApp confirmation (continuing):",
+          err
+        );
+      }
+    } else {
+      console.log(
+        "[SendEnquiry] User number invalid/missing; skipping user WhatsApp confirmation"
+      );
     }
 
     const db = mongoose.connection.db;
@@ -87,7 +128,7 @@ export const SendEnquiry = async (req, res) => {
       status: true,
     });
   } catch (error) {
-    console.error(error);
+    console.error("[SendEnquiry] Internal error:", error);
 
     return res.status(500).json({
       message: "Internal Server Error",
