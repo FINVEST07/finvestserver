@@ -2,8 +2,8 @@ import express from 'express';
 import dotenv from 'dotenv';
 import bodyParser from 'body-parser';
 import cors from 'cors';
-import ConnectDB from '../src/db.js';
-import approuter from '../src/router.js';
+import ConnectDB from './db.js';
+import approuter from './router.js';
 // import { encrypt } from '../src/utils/security.js';
 import path from 'path';
 import cookieParser from "cookie-parser";
@@ -11,7 +11,7 @@ import cookieParser from "cookie-parser";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 4002;
+const PORT = process.env.PORT || 4011;
 
 const allowedOrigins = new Set([
     "https://www.finvestcorp.com",
