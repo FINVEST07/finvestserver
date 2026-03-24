@@ -12,6 +12,8 @@ const checkExisting = async (email) => {
   }
 };
 
+//
+
 const verification = async (email, password) => {
   try {
     const db = mongoose.connection.db;
