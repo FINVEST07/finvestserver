@@ -15,6 +15,9 @@ const ConnectDB = async () => {
         console.log(`Connected to MongoDB: ${connectionInstance.connection.host}`);
     } catch (error) {
         console.error("MongoDB connection FAILED", error);
+        if (process.env.VERCEL === "1") {
+            throw error;
+        }
         process.exit(1);
     }
 }
