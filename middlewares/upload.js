@@ -1,6 +1,54 @@
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import streamifier from "streamifier";
+import { fileTypeFromBuffer } from "file-type";
+
+// Allowed mime types and extensions
+const ALLOWED_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "application/pdf",
+];
+
+const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf"];
+
+/**
+ * Validates file buffer against magic numbers and allowed types
+ * @param {Buffer} buffer 
+ * @param {string} originalName 
+ * @returns {Promise<{isValid: boolean, error?: string}>}
+ */
+const validateFileContent = async (buffer, originalName) => {
+  try {
+    const type = await fileTypeFromBuffer(buffer);
+    
+    if (!type) {
+      // file-type might not recognize some valid PDFs or very small files
+      // Additional check for PDF header if file-type fails
+      const isPdfHeader = buffer.slice(0, 4).toString() === '%PDF';
+      if (isPdfHeader && originalName.toLowerCase().endsWith('.pdf')) {
+        return { isValid: true };
+      }
+      return { isValid: false, error: "Unknown or invalid file type content" };
+    }
+
+    if (!ALLOWED_MIME_TYPES.includes(type.mime)) {
+      return { isValid: false, error: `File type ${type.mime} is not allowed` };
+    }
+
+    const ext = `.${type.ext}`;
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      return { isValid: false, error: `Extension ${ext} is not allowed` };
+    }
+
+    return { isValid: true };
+  } catch (error) {
+    console.error("Validation error:", error);
+    return { isValid: false, error: "Error validating file content" };
+  }
+};
 
 // Configure Cloudinary
 cloudinary.config({
@@ -18,6 +66,13 @@ const upload = multer({
     fileSize: 50 * 1024 * 1024,  // 50MB per file
     fields: 50,                   // Maximum number of fields
     files: 20                     // Maximum number of files
+  },
+  fileFilter: (req, file, cb) => {
+    const ext = "." + file.originalname.split(".").pop().toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      return cb(new Error("Only images and PDFs are allowed"), false);
+    }
+    cb(null, true);
   }
 }).any(); // Accept any files
 
@@ -61,6 +116,12 @@ const uploadBase64ToCloudinary = async (
     // Decode base64 into a Buffer
     const fileBuffer = Buffer.from(cleanBase64, 'base64');
 
+    // Security Validation: Magic number check
+    const validation = await validateFileContent(fileBuffer, fileInfo.name || fieldName);
+    if (!validation.isValid) {
+      throw new Error(`Security validation failed: ${validation.error}`);
+    }
+
     // Upload via stream for reliability (prevents zero-byte PDFs)
     const uploadResult = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
@@ -94,7 +155,13 @@ const uploadBase64ToCloudinary = async (
 };
 
 // Helper function to upload file buffer to Cloudinary
-const uploadBufferToCloudinary = (file) => {
+const uploadBufferToCloudinary = async (file) => {
+  // Security Validation: Magic number check
+  const validation = await validateFileContent(file.buffer, file.originalname);
+  if (!validation.isValid) {
+    throw new Error(`Security validation failed for ${file.originalname}: ${validation.error}`);
+  }
+
   return new Promise((resolve, reject) => {
     const resourceType = getResourceType(file.mimetype);
     const timestamp = Date.now();
@@ -222,6 +289,13 @@ export const singleupload = (req, res, next) => {
     storage,
     limits: {
       fileSize: 50 * 1024 * 1024, // 50MB
+    },
+    fileFilter: (req, file, cb) => {
+      const ext = "." + file.originalname.split(".").pop().toLowerCase();
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        return cb(new Error("Only images and PDFs are allowed"), false);
+      }
+      cb(null, true);
     }
   }).fields([
     { name: "file", maxCount: 1 },
