@@ -379,3 +379,44 @@ export const singleupload = (req, res, next) => {
     }
   });
 };
+
+// Lightweight upload middleware specifically for property photos
+export const propertyUpload = (req, res, next) => {
+  const uploadProps = multer({
+    storage,
+    limits: {
+      fileSize: 15 * 1024 * 1024, // 15MB per image
+      files: 5,
+      fields: 20,
+    },
+    fileFilter: (req, file, cb) => {
+      const ext = "." + file.originalname.split(".").pop().toLowerCase();
+      const allowed = [".jpg", ".jpeg", ".png", ".webp"];
+      if (!allowed.includes(ext)) {
+        return cb(new Error("Only jpg, jpeg, png, and webp images are allowed"), false);
+      }
+      cb(null, true);
+    },
+  }).fields([{ name: "photos", maxCount: 5 }]);
+
+  uploadProps(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ status: false, message: "Multer error: " + err.message });
+    }
+
+    try {
+      const photoFiles = (req.files && req.files.photos) || [];
+      if (!photoFiles.length) {
+        req.uploadedFiles = [];
+        return next();
+      }
+
+      const uploads = await Promise.all(photoFiles.map(uploadBufferToCloudinary));
+      req.uploadedFiles = uploads;
+      next();
+    } catch (error) {
+      console.error("propertyUpload error:", error);
+      res.status(500).json({ status: false, message: "Property image upload failed" });
+    }
+  });
+};

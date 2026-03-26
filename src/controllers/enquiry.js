@@ -82,7 +82,15 @@ export const SendEnquiry = async (req, res) => {
     if (userNumber) {
       const userMessage =
         `Hi ${normalizedName},\n\n` +
-        `We have received your enquiry at ${instituteName}. Our team will get back to you shortly.\n\n` +
+        `We have received your enquiry at ${instituteName}. Here are the details you shared:\n\n` +
+        `Name: ${normalizedName}\n` +
+        `Email: ${email}\n` +
+        `Mobile: ${normalizedMobile}\n` +
+        `City: ${normalizedCity}\n` +
+        `Service: ${normalizedService}\n` +
+        `Amount: ${normalizedAmount}\n` +
+        `Referral Code: ${normalizedReferralCode}\n\n` +
+        `Our team will get back to you shortly.\n\n` +
         (instituteContact ? `Contact: ${instituteContact}` : "");
 
       console.log("[SendEnquiry] Sending user WhatsApp confirmation");

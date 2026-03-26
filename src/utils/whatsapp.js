@@ -19,16 +19,13 @@ export const normalizeReceiverNumber = (value) => {
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const sendWhatsappMessage = async ({ number, message }) => {
-  const username = process.env.WHATSAPPER_USERNAME || "";
+  const username = (process.env.WHATSAPPER_USERNAME || "FinvestApp").trim();
   const token = process.env.WHATSAPPER_TOKEN || "";
   const baseUrl = process.env.WHATSAPPER_BASE_URL || "";
+  const endpointPath = "/api/public/send-msg";
 
   if (!baseUrl) {
     throw new Error("WHATSAPPER_BASE_URL is missing in environment variables");
-  }
-
-  if (!username) {
-    throw new Error("WHATSAPPER_USERNAME is missing in environment variables");
   }
 
   if (!token) {
@@ -43,7 +40,12 @@ export const sendWhatsappMessage = async ({ number, message }) => {
     throw new Error("WhatsApp message is empty");
   }
 
-  const response = await axios.get(baseUrl, {
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+  const requestUrl = normalizedBaseUrl.endsWith(endpointPath)
+    ? normalizedBaseUrl
+    : `${normalizedBaseUrl}${endpointPath}`;
+
+  const response = await axios.get(requestUrl, {
     params: {
       username,
       number,
@@ -58,6 +60,12 @@ export const sendWhatsappMessage = async ({ number, message }) => {
 
   let parsed = response.data;
   if (typeof parsed === "string") {
+    if (parsed.trim().toLowerCase().startsWith("<!doctype html")) {
+      throw new Error(
+        "WhatsApp API returned HTML page. Check WHATSAPPER_BASE_URL and ensure it points to the send endpoint."
+      );
+    }
+
     try {
       parsed = JSON.parse(parsed);
     } catch (err) {

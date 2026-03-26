@@ -10,7 +10,7 @@ import {
   SendLoginOtp,
   verifyotp,
 } from "./controllers/users.js";
-import uploadMiddleware, { singleupload } from "../middlewares/upload.js";
+import uploadMiddleware, { propertyUpload, singleupload } from "../middlewares/upload.js";
 import { getBlogs, createBlog, deleteBlog, getBlogById, getBlogBySlug, updateBlog } from "./controllers/blogs.js";
 import { getMedia, createMedia, deleteMedia } from "./controllers/media.js";
 import { getSitemap } from "./controllers/sitemap.js";
@@ -42,6 +42,13 @@ import {
 } from "./controllers/application.js";
 import { GetCities } from "./controllers/cities.js";
 import { GetEnquiries, SendEnquiry } from "./controllers/enquiry.js";
+import {
+  createProperty,
+  deleteProperty,
+  getPropertyById,
+  getProperties,
+  updateProperty,
+} from "./controllers/properties.js";
 
 const approuter = Router();
 
@@ -113,6 +120,13 @@ approuter.delete("/api/blogs/:id", deleteBlog);
 approuter.get("/api/media", getMedia);
 approuter.post("/api/media", singleupload, createMedia);
 approuter.delete("/api/media/:id", deleteMedia);
+
+// Properties routes
+approuter.get("/api/properties", getProperties);
+approuter.get("/api/properties/:id", getPropertyById);
+approuter.post("/api/properties", propertyUpload, createProperty);
+approuter.put("/api/properties/:id", propertyUpload, updateProperty);
+approuter.delete("/api/properties/:id", deleteProperty);
 
 // Dynamic sitemap
 approuter.get("/sitemap.xml", getSitemap);
