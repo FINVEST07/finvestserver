@@ -49,6 +49,15 @@ import {
   getProperties,
   updateProperty,
 } from "./controllers/properties.js";
+import {
+  createJob,
+  deleteJob,
+  getJobById,
+  getJobs,
+  updateJob,
+} from "./controllers/jobs.js";
+import { getFavourites, toggleFavourite } from "./controllers/favourites.js";
+import { requireUserAuth } from "./middlewares/auth.js";
 
 const approuter = Router();
 
@@ -127,6 +136,17 @@ approuter.get("/api/properties/:id", getPropertyById);
 approuter.post("/api/properties", propertyUpload, createProperty);
 approuter.put("/api/properties/:id", propertyUpload, updateProperty);
 approuter.delete("/api/properties/:id", deleteProperty);
+
+// Jobs routes
+approuter.get("/api/jobs", getJobs);
+approuter.get("/api/jobs/:id", getJobById);
+approuter.post("/api/jobs", uploadMiddleware, createJob);
+approuter.put("/api/jobs/:id", uploadMiddleware, updateJob);
+approuter.delete("/api/jobs/:id", deleteJob);
+
+// Favourites routes
+approuter.post("/api/favourites/toggle", requireUserAuth, toggleFavourite);
+approuter.get("/api/favourites", requireUserAuth, getFavourites);
 
 // Dynamic sitemap
 approuter.get("/sitemap.xml", getSitemap);

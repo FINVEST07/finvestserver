@@ -1,9 +1,21 @@
 import mongoose from "mongoose";
+import { Resend } from "resend";
 import {
   normalizeReceiverNumber,
   sendWhatsappMessage,
   sleep,
 } from "../utils/whatsapp.js";
+
+const resendApiKey = process.env.RESEND_API_KEY || "";
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
+
+const escapeHtml = (value) =>
+  String(value ?? "-")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 export const SendEnquiry = async (req, res) => {
   try {
@@ -42,16 +54,20 @@ export const SendEnquiry = async (req, res) => {
 
     const instituteName = process.env.INSTITUTE_NAME || "FINVESTCORP";
     const instituteContact = process.env.INSTITUTE_CONTACT || "";
-    const adminNumber = normalizeReceiverNumber(process.env.ADMIN_WHATSAPP_NUMBER);
+    const adminEmail =
+      process.env.ADMIN_NOTIFICATION_EMAIL ||
+      process.env.ENQUIRY_ADMIN_EMAIL ||
+      "officefinvestcorp@gmail.com";
+    const enquiryMailFrom =
+      process.env.ENQUIRY_MAIL_FROM ||
+      process.env.RESEND_FROM ||
+      "FINVESTCORP <no-reply@t-rexinfotech.in>";
+    const configuredAdminNumber =
+      process.env.ADMIN_WHATSAPP_NUMBER || process.env.INSTITUTE_CONTACT || "";
+    const adminNumber = normalizeReceiverNumber(configuredAdminNumber);
     const userNumber = normalizeReceiverNumber(normalizedMobile);
 
-    if (!adminNumber) {
-      console.error("[SendEnquiry] ADMIN_WHATSAPP_NUMBER is missing/invalid");
-      return res.status(500).json({
-        message: "Erorr sending enquiry",
-        status: false,
-      });
-    }
+    const db = mongoose.connection.db;
 
     const adminMessage =
       `New Enquiry (${instituteName})\n\n` +
@@ -64,19 +80,167 @@ export const SendEnquiry = async (req, res) => {
       `Referral Code: ${normalizedReferralCode}\n` +
       `Message: ${normalizedMessage}`;
 
-    console.log("[SendEnquiry] Sending admin WhatsApp message");
-    try {
-      await sendWhatsappMessage({
-        number: adminNumber,
-        message: adminMessage,
-      });
-      console.log("[SendEnquiry] Admin WhatsApp message sent");
-    } catch (err) {
-      console.error("[SendEnquiry] Failed to send admin WhatsApp message:", err);
-      return res.status(500).json({
-        message: "Erorr sending enquiry",
-        status: false,
-      });
+    const adminEmailSubject = `New Enquiry (${instituteName})`;
+    const adminEmailHtml = `
+      <p>A new enquiry has been received.</p>
+      <p><strong>Name:</strong> ${escapeHtml(normalizedName)}</p>
+      <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+      <p><strong>Mobile:</strong> ${escapeHtml(normalizedMobile)}</p>
+      <p><strong>City:</strong> ${escapeHtml(normalizedCity)}</p>
+      <p><strong>Service:</strong> ${escapeHtml(normalizedService)}</p>
+      <p><strong>Amount:</strong> ${escapeHtml(normalizedAmount)}</p>
+      <p><strong>Referral Code:</strong> ${escapeHtml(normalizedReferralCode)}</p>
+      <p><strong>Message:</strong> ${escapeHtml(normalizedMessage)}</p>
+    `;
+
+    const userEmailSubject = `${instituteName} Enquiry Received`;
+    const userEmailHtml = `
+      <p>Hi ${escapeHtml(normalizedName)},</p>
+      <p>We have received your enquiry at ${escapeHtml(instituteName)}. Here are the details you shared:</p>
+      <p><strong>Name:</strong> ${escapeHtml(normalizedName)}</p>
+      <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+      <p><strong>Mobile:</strong> ${escapeHtml(normalizedMobile)}</p>
+      <p><strong>City:</strong> ${escapeHtml(normalizedCity)}</p>
+      <p><strong>Service:</strong> ${escapeHtml(normalizedService)}</p>
+      <p><strong>Amount:</strong> ${escapeHtml(normalizedAmount)}</p>
+      <p><strong>Referral Code:</strong> ${escapeHtml(normalizedReferralCode)}</p>
+      <p><strong>Message:</strong> ${escapeHtml(normalizedMessage)}</p>
+      <p>Our team will get back to you shortly.</p>
+      ${instituteContact ? `<p>Contact: ${escapeHtml(instituteContact)}</p>` : ""}
+    `;
+
+    const payload = {
+      name: normalizedName,
+      email,
+      mobile: normalizedMobile,
+      city: normalizedCity,
+      service: normalizedService,
+      amount: normalizedAmount,
+      referralCode: normalizedReferralCode,
+      message: normalizedMessage,
+      createdAt: new Date(),
+      notifications: {
+        adminWhatsapp: {
+          attempted: false,
+          sent: false,
+          reason: "",
+        },
+        userWhatsapp: {
+          attempted: false,
+          sent: false,
+          reason: "",
+        },
+        adminEmail: {
+          attempted: false,
+          sent: false,
+          reason: "",
+        },
+        userEmail: {
+          attempted: false,
+          sent: false,
+          reason: "",
+        },
+      },
+    };
+
+    const inserted = await db.collection("enquiries").insertOne(payload);
+
+    const notificationState = {
+      adminWhatsapp: {
+        attempted: false,
+        sent: false,
+        reason: "",
+      },
+      userWhatsapp: {
+        attempted: false,
+        sent: false,
+        reason: "",
+      },
+      adminEmail: {
+        attempted: false,
+        sent: false,
+        reason: "",
+      },
+      userEmail: {
+        attempted: false,
+        sent: false,
+        reason: "",
+      },
+    };
+
+    if (adminNumber) {
+      console.log("[SendEnquiry] Sending admin WhatsApp message");
+      notificationState.adminWhatsapp.attempted = true;
+      try {
+        await sendWhatsappMessage({
+          number: adminNumber,
+          message: adminMessage,
+        });
+        notificationState.adminWhatsapp.sent = true;
+        console.log("[SendEnquiry] Admin WhatsApp message sent");
+      } catch (err) {
+        notificationState.adminWhatsapp.reason =
+          err?.message || "admin_whatsapp_send_failed";
+        console.error("[SendEnquiry] Failed to send admin WhatsApp message:", err);
+      }
+    } else {
+      notificationState.adminWhatsapp.reason =
+        "ADMIN_WHATSAPP_NUMBER is missing/invalid";
+      console.error("[SendEnquiry] ADMIN_WHATSAPP_NUMBER is missing/invalid");
+    }
+
+    if (!resend) {
+      notificationState.adminEmail.reason = "RESEND_API_KEY is missing; skipping admin email";
+      notificationState.userEmail.reason = "RESEND_API_KEY is missing; skipping user email";
+      console.error("[SendEnquiry] RESEND_API_KEY is missing; email notifications skipped");
+    } else {
+      if (adminEmail) {
+        notificationState.adminEmail.attempted = true;
+        try {
+          const adminMailResult = await resend.emails.send({
+            from: enquiryMailFrom,
+            to: [adminEmail],
+            subject: adminEmailSubject,
+            html: adminEmailHtml,
+          });
+
+          if (adminMailResult?.error) {
+            throw new Error(adminMailResult.error.message || "admin_email_send_failed");
+          }
+
+          notificationState.adminEmail.sent = true;
+          console.log("[SendEnquiry] Admin email sent");
+        } catch (err) {
+          notificationState.adminEmail.reason = err?.message || "admin_email_send_failed";
+          console.error("[SendEnquiry] Failed to send admin email:", err);
+        }
+      } else {
+        notificationState.adminEmail.reason =
+          "ADMIN_NOTIFICATION_EMAIL / ENQUIRY_ADMIN_EMAIL is missing";
+        console.error(
+          "[SendEnquiry] ADMIN_NOTIFICATION_EMAIL / ENQUIRY_ADMIN_EMAIL is missing"
+        );
+      }
+
+      notificationState.userEmail.attempted = true;
+      try {
+        const userMailResult = await resend.emails.send({
+          from: enquiryMailFrom,
+          to: [email],
+          subject: userEmailSubject,
+          html: userEmailHtml,
+        });
+
+        if (userMailResult?.error) {
+          throw new Error(userMailResult.error.message || "user_email_send_failed");
+        }
+
+        notificationState.userEmail.sent = true;
+        console.log("[SendEnquiry] User confirmation email sent");
+      } catch (err) {
+        notificationState.userEmail.reason = err?.message || "user_email_send_failed";
+        console.error("[SendEnquiry] Failed to send user confirmation email:", err);
+      }
     }
 
     if (userNumber) {
@@ -94,47 +258,75 @@ export const SendEnquiry = async (req, res) => {
         (instituteContact ? `Contact: ${instituteContact}` : "");
 
       console.log("[SendEnquiry] Sending user WhatsApp confirmation");
+      notificationState.userWhatsapp.attempted = true;
       try {
         await sleep(400);
         await sendWhatsappMessage({
           number: userNumber,
           message: userMessage,
         });
+        notificationState.userWhatsapp.sent = true;
         console.log("[SendEnquiry] User WhatsApp confirmation sent");
       } catch (err) {
+        notificationState.userWhatsapp.reason =
+          err?.message || "user_whatsapp_send_failed";
         console.error(
           "[SendEnquiry] Failed to send user WhatsApp confirmation (continuing):",
           err
         );
       }
     } else {
+      notificationState.userWhatsapp.reason =
+        "User number invalid/missing; skipping user WhatsApp confirmation";
       console.log(
         "[SendEnquiry] User number invalid/missing; skipping user WhatsApp confirmation"
       );
     }
 
-    const db = mongoose.connection.db;
+    await db.collection("enquiries").updateOne(
+      { _id: inserted.insertedId },
+      {
+        $set: {
+          notifications: notificationState,
+          notificationUpdatedAt: new Date(),
+        },
+      }
+    );
 
-    const payload = {
-      name: normalizedName,
-      email,
-      mobile: normalizedMobile,
-      city: normalizedCity,
-      service: normalizedService,
-      amount: normalizedAmount,
-      referralCode: normalizedReferralCode,
-      message: normalizedMessage,
-      createdAt: new Date(),
+    const adminSent = notificationState.adminWhatsapp.sent;
+    const userSent = notificationState.userWhatsapp.sent;
+    const adminEmailSent = notificationState.adminEmail.sent;
+    const userEmailSent = notificationState.userEmail.sent;
+    const responsePayload = {
+      status: true,
+      saved: true,
+      message: "Enquiry submitted successfully.",
+      notifications: {
+        adminWhatsapp: adminSent,
+        userWhatsapp: userSent,
+        adminEmail: adminEmailSent,
+        userEmail: userEmailSent,
+      },
+      notificationReasons: {
+        adminWhatsapp: notificationState.adminWhatsapp.reason || "",
+        userWhatsapp: notificationState.userWhatsapp.reason || "",
+        adminEmail: notificationState.adminEmail.reason || "",
+        userEmail: notificationState.userEmail.reason || "",
+      },
     };
 
-    await db.collection("enquiries").insertOne(payload);
+    if (!adminSent && !adminEmailSent) {
+      responsePayload.message =
+        "Enquiry saved, but admin notifications could not be delivered right now.";
+      return res.status(202).json(responsePayload);
+    }
 
+    if (!userSent && !userEmailSent) {
+      responsePayload.message =
+        "Enquiry submitted. Confirmation to your number/email could not be delivered.";
+    }
 
-
-    return res.status(200).json({
-      message: "Enquiry Send Successfully",
-      status: true,
-    });
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error("[SendEnquiry] Internal error:", error);
 

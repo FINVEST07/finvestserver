@@ -72,6 +72,7 @@ export const adduser = async (req, res) => {
       mobile,
       user: userid,
       password,
+      favourites: [],
       createdAt: new Date(),
       otp: otp,
       otpGeneratedAt: new Date(),

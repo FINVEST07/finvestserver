@@ -391,13 +391,21 @@ export const propertyUpload = (req, res, next) => {
     },
     fileFilter: (req, file, cb) => {
       const ext = "." + file.originalname.split(".").pop().toLowerCase();
-      const allowed = [".jpg", ".jpeg", ".png", ".webp"];
+      const allowed = file.fieldname === "pdfDocument"
+        ? [".pdf"]
+        : [".jpg", ".jpeg", ".png", ".webp"];
       if (!allowed.includes(ext)) {
-        return cb(new Error("Only jpg, jpeg, png, and webp images are allowed"), false);
+        const message = file.fieldname === "pdfDocument"
+          ? "Only PDF is allowed for property document"
+          : "Only jpg, jpeg, png, and webp images are allowed";
+        return cb(new Error(message), false);
       }
       cb(null, true);
     },
-  }).fields([{ name: "photos", maxCount: 5 }]);
+  }).fields([
+    { name: "photos", maxCount: 5 },
+    { name: "pdfDocument", maxCount: 1 },
+  ]);
 
   uploadProps(req, res, async (err) => {
     if (err) {
@@ -406,12 +414,15 @@ export const propertyUpload = (req, res, next) => {
 
     try {
       const photoFiles = (req.files && req.files.photos) || [];
-      if (!photoFiles.length) {
+      const pdfFiles = (req.files && req.files.pdfDocument) || [];
+      const allFiles = [...photoFiles, ...pdfFiles];
+
+      if (!allFiles.length) {
         req.uploadedFiles = [];
         return next();
       }
 
-      const uploads = await Promise.all(photoFiles.map(uploadBufferToCloudinary));
+      const uploads = await Promise.all(allFiles.map(uploadBufferToCloudinary));
       req.uploadedFiles = uploads;
       next();
     } catch (error) {

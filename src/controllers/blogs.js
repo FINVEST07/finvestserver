@@ -131,6 +131,10 @@ export const deleteBlog = async (req, res) => {
     }
 
     await db.collection("blogs").deleteOne({ _id: new mongoose.Types.ObjectId(id) });
+    await db
+      .collection("users")
+      .updateMany({}, { $pull: { favourites: { type: "blog", id: String(id) } } });
+
     return res.status(200).json({ status: true, message: "Blog deleted" });
   } catch (error) {
     console.error("deleteBlog error", error);
