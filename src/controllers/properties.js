@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { v2 as cloudinary } from "cloudinary";
+import axios from "axios";
 
 const validListingTypes = new Set(["Auction", "Distress"]);
 const validPropertyTypes = new Set([
@@ -27,8 +28,115 @@ const parsePrice = (value) => {
   return parsed;
 };
 
+const normalizeRawPublicId = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/\.pdf$/i, "");
+
+const deriveRawPublicIdFromUrl = (value) => {
+  const url = String(value || "").trim();
+  if (!url) return "";
+
+  try {
+    const parsed = new URL(url);
+    const match = parsed.pathname.match(/\/raw\/upload\/(?:v\d+\/)?(.+)$/i);
+    if (!match?.[1]) return "";
+
+    return normalizeRawPublicId(match[1]);
+  } catch (error) {
+    return "";
+  }
+};
+
+const shapePdfDocumentForResponse = (pdfDocument) => {
+  if (!pdfDocument) return null;
+
+  if (typeof pdfDocument === "string") {
+    const derivedPublicId = deriveRawPublicIdFromUrl(pdfDocument);
+
+    if (derivedPublicId) {
+      try {
+        const signedDownloadUrl = cloudinary.utils.private_download_url(
+          `${derivedPublicId}.pdf`,
+          "pdf",
+          {
+            resource_type: "raw",
+            type: "upload",
+            attachment: false,
+            expires_at: Math.floor(Date.now() / 1000) + 3600,
+          }
+        );
+
+        return {
+          url: signedDownloadUrl,
+          public_id: derivedPublicId,
+          resource_type: "raw",
+        };
+      } catch (error) {
+        console.error("Failed to sign legacy property pdf url", error);
+      }
+    }
+
+    return {
+      url: pdfDocument,
+    };
+  }
+
+  const doc = { ...pdfDocument };
+  const publicId = normalizeRawPublicId(
+    doc.public_id || deriveRawPublicIdFromUrl(doc.url) || ""
+  );
+  const resourceType = doc.resource_type || "raw";
+
+  if (!publicId) {
+    return doc;
+  }
+
+  try {
+    if (resourceType === "raw") {
+      const signedDownloadUrl = cloudinary.utils.private_download_url(
+        `${publicId}.pdf`,
+        "pdf",
+        {
+          resource_type: "raw",
+          type: "upload",
+          attachment: false,
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+        }
+      );
+
+      return {
+        ...doc,
+        public_id: publicId,
+        url: signedDownloadUrl,
+      };
+    }
+
+    const signedUrl = cloudinary.url(publicId, {
+      resource_type: resourceType,
+      type: "upload",
+      secure: true,
+      sign_url: true,
+    });
+
+    return {
+      ...doc,
+      url: signedUrl,
+    };
+  } catch (error) {
+    console.error("Failed to sign property pdf url", error);
+    return doc;
+  }
+};
+
 const shapePropertyForResponse = (property) => {
   if (!property) return property;
+
+  const fallbackCreatedAt =
+    property.createdAt ||
+    (property._id && typeof property._id.getTimestamp === "function"
+      ? property._id.getTimestamp()
+      : null);
 
   return {
     ...property,
@@ -52,8 +160,81 @@ const shapePropertyForResponse = (property) => {
     bankName: property.bankName || "",
     contactPerson: property.contactPerson || "",
     contactNumber: property.contactNumber || property.phoneNumber || "",
-    pdfDocument: property.pdfDocument || null,
+    pdfDocument: shapePdfDocumentForResponse(property.pdfDocument),
+    createdAt: fallbackCreatedAt,
   };
+};
+
+export const getPropertyDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: false, message: "Invalid property id" });
+    }
+
+    const db = mongoose.connection.db;
+    const property = await db
+      .collection("properties")
+      .findOne({ _id: new mongoose.Types.ObjectId(id) });
+
+    if (!property) {
+      return res.status(404).json({ status: false, message: "Property not found" });
+    }
+
+    const rawDoc = property.pdfDocument;
+    if (!rawDoc) {
+      return res.status(404).json({ status: false, message: "Property document not found" });
+    }
+
+    const publicId = normalizeRawPublicId(
+      (typeof rawDoc === "object" ? rawDoc.public_id : "") ||
+        deriveRawPublicIdFromUrl(typeof rawDoc === "string" ? rawDoc : rawDoc?.url) ||
+        ""
+    );
+
+    if (!publicId) {
+      return res.status(404).json({ status: false, message: "Property document is unavailable" });
+    }
+
+    const signedDownloadUrl = cloudinary.utils.private_download_url(
+      `${publicId}.pdf`,
+      "pdf",
+      {
+        resource_type: "raw",
+        type: "upload",
+        attachment: false,
+        expires_at: Math.floor(Date.now() / 1000) + 600,
+      }
+    );
+
+    const cloudinaryResponse = await axios.get(signedDownloadUrl, {
+      responseType: "arraybuffer",
+      timeout: 30000,
+      validateStatus: () => true,
+    });
+
+    if (cloudinaryResponse.status !== 200) {
+      return res.status(502).json({
+        status: false,
+        message: "Failed to fetch property document",
+      });
+    }
+
+    const filename =
+      (typeof rawDoc === "object" && rawDoc?.original_filename
+        ? String(rawDoc.original_filename)
+        : "property-document")
+        .replace(/[^a-zA-Z0-9-_ ]/g, "")
+        .trim() || "property-document";
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${filename}.pdf"`);
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(200).send(Buffer.from(cloudinaryResponse.data));
+  } catch (error) {
+    console.error("getPropertyDocument error", error);
+    return res.status(500).json({ status: false, message: "Failed to load property document" });
+  }
 };
 
 export const getProperties = async (req, res) => {

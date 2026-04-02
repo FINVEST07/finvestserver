@@ -10,9 +10,9 @@ import {
   SendLoginOtp,
   verifyotp,
 } from "./controllers/users.js";
-import uploadMiddleware, { propertyUpload, singleupload } from "../middlewares/upload.js";
+import uploadMiddleware, { propertyUpload, singleupload, singleuploadOptional } from "../middlewares/upload.js";
 import { getBlogs, createBlog, deleteBlog, getBlogById, getBlogBySlug, updateBlog } from "./controllers/blogs.js";
-import { getMedia, createMedia, deleteMedia } from "./controllers/media.js";
+import { getMedia, createMedia, deleteMedia, updateMedia } from "./controllers/media.js";
 import { getSitemap } from "./controllers/sitemap.js";
 import {
   CreateCustomer,
@@ -45,6 +45,7 @@ import { GetEnquiries, SendEnquiry } from "./controllers/enquiry.js";
 import {
   createProperty,
   deleteProperty,
+  getPropertyDocument,
   getPropertyById,
   getProperties,
   updateProperty,
@@ -128,10 +129,12 @@ approuter.delete("/api/blogs/:id", deleteBlog);
 // Media routes
 approuter.get("/api/media", getMedia);
 approuter.post("/api/media", singleupload, createMedia);
+approuter.put("/api/media/:id", singleuploadOptional, updateMedia);
 approuter.delete("/api/media/:id", deleteMedia);
 
 // Properties routes
 approuter.get("/api/properties", getProperties);
+approuter.get("/api/properties/:id/document", getPropertyDocument);
 approuter.get("/api/properties/:id", getPropertyById);
 approuter.post("/api/properties", propertyUpload, createProperty);
 approuter.put("/api/properties/:id", propertyUpload, updateProperty);

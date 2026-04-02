@@ -1,10 +1,11 @@
 import mongoose from "mongoose";
 
-const validItemTypes = new Set(["blog", "property"]);
+const validItemTypes = new Set(["blog", "property", "job"]);
 
 const collectionByType = {
   blog: "blogs",
   property: "properties",
+  job: "jobs",
 };
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
@@ -23,7 +24,7 @@ export const toggleFavourite = async (req, res) => {
     if (!validItemTypes.has(itemType)) {
       return res.status(400).json({
         status: false,
-        message: "itemType must be blog or property",
+        message: "itemType must be blog, property or job",
       });
     }
 
@@ -128,21 +129,30 @@ export const getFavourites = async (req, res) => {
       .filter((f) => f.type === "property")
       .map((f) => new mongoose.Types.ObjectId(f.id));
 
-    const [blogs, properties] = await Promise.all([
+    const jobIds = deduped
+      .filter((f) => f.type === "job")
+      .map((f) => new mongoose.Types.ObjectId(f.id));
+
+    const [blogs, properties, jobs] = await Promise.all([
       blogIds.length
         ? db.collection("blogs").find({ _id: { $in: blogIds } }).sort({ createdAt: -1 }).toArray()
         : Promise.resolve([]),
       propertyIds.length
         ? db.collection("properties").find({ _id: { $in: propertyIds } }).sort({ createdAt: -1 }).toArray()
         : Promise.resolve([]),
+      jobIds.length
+        ? db.collection("jobs").find({ _id: { $in: jobIds } }).sort({ createdAt: -1 }).toArray()
+        : Promise.resolve([]),
     ]);
 
     const existingBlogIds = new Set(blogs.map((b) => String(b._id)));
     const existingPropertyIds = new Set(properties.map((p) => String(p._id)));
+    const existingJobIds = new Set(jobs.map((j) => String(j._id)));
 
     const cleanedFavourites = deduped.filter((fav) => {
       if (fav.type === "blog") return existingBlogIds.has(fav.id);
       if (fav.type === "property") return existingPropertyIds.has(fav.id);
+      if (fav.type === "job") return existingJobIds.has(fav.id);
       return false;
     });
 
@@ -166,6 +176,7 @@ export const getFavourites = async (req, res) => {
         favourites: cleanedFavourites,
         blogs,
         properties,
+        jobs,
       },
     });
   } catch (error) {

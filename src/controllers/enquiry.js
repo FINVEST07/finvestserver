@@ -17,6 +17,30 @@ const escapeHtml = (value) =>
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const allowedServices = new Set([
+  "loan",
+  "insurance",
+  "mutual_fund",
+  "alternate",
+  "auction",
+]);
+
+const serviceLabels = {
+  loan: "Loan",
+  insurance: "Insurance",
+  mutual_fund: "Mutual Fund",
+  alternate: "Alternate Investment",
+  auction: "Auction Properties",
+};
+
+const normalizeServiceValue = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized === "investment") return "mutual_fund";
+  if (allowedServices.has(normalized)) return normalized;
+  return "";
+};
+
 export const SendEnquiry = async (req, res) => {
   try {
     console.log("[SendEnquiry] Received enquiry");
@@ -40,7 +64,10 @@ export const SendEnquiry = async (req, res) => {
       name || [firstName, lastName].filter(Boolean).join(" ") || "-";
     const normalizedMobile = mobile || phone || "-";
     const normalizedCity = city || "-";
-    const normalizedService = service || "-";
+    const normalizedServiceValue = normalizeServiceValue(service);
+    const normalizedService = normalizedServiceValue
+      ? serviceLabels[normalizedServiceValue]
+      : "-";
     const normalizedAmount = amount || "-";
     const normalizedReferralCode = referralCode || refercode || "-";
     const normalizedMessage = message || "-";
@@ -48,6 +75,13 @@ export const SendEnquiry = async (req, res) => {
     if (!email) {
       return res.status(400).json({
         message: "Email is required",
+        status: false,
+      });
+    }
+
+    if (!normalizedServiceValue) {
+      return res.status(400).json({
+        message: "Please select a valid service",
         status: false,
       });
     }
@@ -115,6 +149,7 @@ export const SendEnquiry = async (req, res) => {
       mobile: normalizedMobile,
       city: normalizedCity,
       service: normalizedService,
+      serviceValue: normalizedServiceValue,
       amount: normalizedAmount,
       referralCode: normalizedReferralCode,
       message: normalizedMessage,

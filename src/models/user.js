@@ -4,7 +4,7 @@ const favouriteItemSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ["blog", "property"],
+      enum: ["blog", "property", "job"],
       required: true,
     },
     id: {

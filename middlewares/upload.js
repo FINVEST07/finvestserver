@@ -284,7 +284,7 @@ const uploadMiddleware = (req, res, next) => {
 export default uploadMiddleware;
 
 // Enhanced single upload middleware
-export const singleupload = (req, res, next) => {
+const handleSingleMediaUpload = (req, res, next, { required }) => {
   const uploadSingle = multer({
     storage,
     limits: {
@@ -374,11 +374,19 @@ export const singleupload = (req, res, next) => {
         console.error("Base64 upload error:", error);
         res.status(500).json({ message: "Media upload failed" });
       }
-    } else {
+    } else if (required) {
       res.status(400).json({ message: "No file uploaded" });
+    } else {
+      next();
     }
   });
 };
+
+export const singleupload = (req, res, next) =>
+  handleSingleMediaUpload(req, res, next, { required: true });
+
+export const singleuploadOptional = (req, res, next) =>
+  handleSingleMediaUpload(req, res, next, { required: false });
 
 // Lightweight upload middleware specifically for property photos
 export const propertyUpload = (req, res, next) => {

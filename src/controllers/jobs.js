@@ -175,6 +175,15 @@ export const deleteJob = async (req, res) => {
       }
     }
 
+    try {
+      await mongoose.connection.db.collection("users").updateMany(
+        { "favourites.type": "job", "favourites.id": String(id) },
+        { $pull: { favourites: { type: "job", id: String(id) } } }
+      );
+    } catch (e) {
+      console.error("Failed to cleanup job favourites on delete", e);
+    }
+
     return res.status(200).json({ status: true, message: "Job deleted" });
   } catch (error) {
     console.error("deleteJob error", error);
