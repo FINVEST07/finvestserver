@@ -1,5 +1,20 @@
 import mongoose from "mongoose";
 
+const alphaSpacePattern = /^[A-Za-z]+(?:\s+[A-Za-z]+)*$/;
+
+const normalizeSpaces = (value) => String(value || "").replace(/\s+/g, " ").trim();
+
+const toTitleCase = (value) => {
+  const normalized = normalizeSpaces(value);
+  if (!normalized) return "";
+
+  return normalized
+    .toLowerCase()
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
 const propertyPhotoSchema = new mongoose.Schema(
   {
     url: { type: String, required: true },
@@ -31,8 +46,26 @@ const propertySchema = new mongoose.Schema(
     bhk: { type: String, trim: true, required: true },
     offerPrice: { type: Number, required: true },
     estimatedMarketValue: { type: Number, required: true },
-    location: { type: String, trim: true, required: true },
-    district: { type: String, trim: true, required: true },
+    location: {
+      type: String,
+      trim: true,
+      required: true,
+      set: toTitleCase,
+      validate: {
+        validator: (value) => alphaSpacePattern.test(normalizeSpaces(value)),
+        message: "Only letters are allowed in this field.",
+      },
+    },
+    district: {
+      type: String,
+      trim: true,
+      required: true,
+      set: toTitleCase,
+      validate: {
+        validator: (value) => alphaSpacePattern.test(normalizeSpaces(value)),
+        message: "Only letters are allowed in this field.",
+      },
+    },
     possession: { type: String, enum: ["Physical", "Symbolic"], required: true },
     status: { type: String, enum: ["Available", "Sold Out"], required: true },
     emdDate: { type: Date },

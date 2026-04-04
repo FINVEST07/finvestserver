@@ -395,7 +395,7 @@ export const propertyUpload = (req, res, next) => {
     limits: {
       fileSize: 15 * 1024 * 1024, // 15MB per image
       files: 5,
-      fields: 20,
+      fields: 60,
     },
     fileFilter: (req, file, cb) => {
       const ext = "." + file.originalname.split(".").pop().toLowerCase();

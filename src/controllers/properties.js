@@ -28,6 +28,45 @@ const parsePrice = (value) => {
   return parsed;
 };
 
+const alphaSpacePattern = /^[A-Za-z]+(?:\s+[A-Za-z]+)*$/;
+
+const normalizeSpaces = (value) => String(value || "").replace(/\s+/g, " ").trim();
+
+const toTitleCase = (value) => {
+  const normalized = normalizeSpaces(value);
+  if (!normalized) return "";
+
+  return normalized
+    .toLowerCase()
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
+const isAlphaSpaceOnly = (value) => alphaSpacePattern.test(normalizeSpaces(value));
+
+const parseStringArray = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item || "").trim()).filter(Boolean);
+      }
+    } catch (error) {
+      return [trimmed];
+    }
+  }
+
+  return [];
+};
+
 const normalizeRawPublicId = (value) =>
   String(value || "")
     .trim()
@@ -138,6 +177,28 @@ const shapePropertyForResponse = (property) => {
       ? property._id.getTimestamp()
       : null);
 
+  const normalizedPhotos = Array.isArray(property.photos)
+    ? property.photos
+        .map((photo) => {
+          if (typeof photo === "string") {
+            const url = String(photo || "").trim();
+            return url ? { url } : null;
+          }
+
+          if (photo && typeof photo === "object") {
+            const url = String(photo.url || photo.secure_url || "").trim();
+            if (!url) return null;
+            return {
+              ...photo,
+              url,
+            };
+          }
+
+          return null;
+        })
+        .filter(Boolean)
+    : [];
+
   return {
     ...property,
     headline: property.headline || property.propertyName || "",
@@ -160,6 +221,7 @@ const shapePropertyForResponse = (property) => {
     bankName: property.bankName || "",
     contactPerson: property.contactPerson || "",
     contactNumber: property.contactNumber || property.phoneNumber || "",
+    photos: normalizedPhotos,
     pdfDocument: shapePdfDocumentForResponse(property.pdfDocument),
     createdAt: fallbackCreatedAt,
   };
@@ -330,8 +392,8 @@ export const createProperty = async (req, res) => {
 
     const normalizedHeadline = String(headline || propertyName || "").trim();
     const normalizedBhk = String(bhk || "").trim();
-    const normalizedLocation = String(location || area || "").trim();
-    const normalizedDistrict = String(district || "").trim();
+    const normalizedLocation = normalizeSpaces(location || area || "");
+    const normalizedDistrict = normalizeSpaces(district || "");
     const normalizedPossession = String(possession || "").trim();
     const normalizedStatus = String(status || "").trim();
 
@@ -372,6 +434,20 @@ export const createProperty = async (req, res) => {
 
     if (!validStatusTypes.has(normalizedStatus)) {
       return res.status(400).json({ status: false, message: "Invalid status" });
+    }
+
+    if (!isAlphaSpaceOnly(normalizedLocation)) {
+      return res.status(400).json({
+        status: false,
+        message: "Only letters are allowed in this field.",
+      });
+    }
+
+    if (!isAlphaSpaceOnly(normalizedDistrict)) {
+      return res.status(400).json({
+        status: false,
+        message: "Only letters are allowed in this field.",
+      });
     }
 
     if (type === "Auction" && !emdDate) {
@@ -438,8 +514,8 @@ export const createProperty = async (req, res) => {
       bhk: normalizedBhk,
       offerPrice: normalizedOfferPrice,
       estimatedMarketValue: normalizedEstimatedValue,
-      location: normalizedLocation,
-      district: normalizedDistrict,
+      location: toTitleCase(normalizedLocation),
+      district: toTitleCase(normalizedDistrict),
       possession: normalizedPossession,
       status: normalizedStatus,
       emdDate: emdDate ? new Date(emdDate) : null,
@@ -577,6 +653,8 @@ export const updateProperty = async (req, res) => {
       bankName,
       contactPerson,
       contactNumber,
+      deletedImages,
+      deletePdf,
 
       // Backward compatibility
       propertyName,
@@ -588,8 +666,8 @@ export const updateProperty = async (req, res) => {
 
     const normalizedHeadline = String(headline || propertyName || "").trim();
     const normalizedBhk = String(bhk || existing.bhk || "").trim();
-    const normalizedLocation = String(location || area || existing.location || existing.area || "").trim();
-    const normalizedDistrict = String(district || existing.district || "").trim();
+    const normalizedLocation = normalizeSpaces(location || area || existing.location || existing.area || "");
+    const normalizedDistrict = normalizeSpaces(district || existing.district || "");
     const normalizedPossession = String(possession || existing.possession || "").trim();
     const normalizedStatus = String(status || existing.status || "").trim();
 
@@ -632,6 +710,20 @@ export const updateProperty = async (req, res) => {
       return res.status(400).json({ status: false, message: "Invalid status" });
     }
 
+    if (!isAlphaSpaceOnly(normalizedLocation)) {
+      return res.status(400).json({
+        status: false,
+        message: "Only letters are allowed in this field.",
+      });
+    }
+
+    if (!isAlphaSpaceOnly(normalizedDistrict)) {
+      return res.status(400).json({
+        status: false,
+        message: "Only letters are allowed in this field.",
+      });
+    }
+
     if (type === "Auction" && !emdDate && !existing.emdDate) {
       return res.status(400).json({ status: false, message: "EMD Date is required for Auction property" });
     }
@@ -663,39 +755,75 @@ export const updateProperty = async (req, res) => {
       ? req.uploadedFiles.filter((f) => f.field === "photos")
       : [];
 
+    const deletedMarkers = new Set(parseStringArray(deletedImages));
+
     if (uploadedPhotos.length > 5) {
       return res
         .status(400)
         .json({ status: false, message: "Maximum 5 photos are allowed" });
     }
 
-    let photos = existing.photos || [];
-    if (uploadedPhotos.length > 0) {
-      if (Array.isArray(existing.photos)) {
-        for (const photo of existing.photos) {
-          if (!photo?.public_id) continue;
-          try {
-            await cloudinary.uploader.destroy(photo.public_id, {
-              resource_type: photo.resource_type || "image",
-            });
-          } catch (err) {
-            console.error("Cloudinary destroy error (property update photo)", err);
-          }
-        }
-      }
+    const existingPhotos = Array.isArray(existing.photos) ? existing.photos : [];
+    const photosToDelete = existingPhotos.filter((photo) => {
+      const photoPublicId = String(photo?.public_id || "").trim();
+      const photoUrl = String(photo?.url || "").trim();
+      return deletedMarkers.has(photoPublicId) || deletedMarkers.has(photoUrl);
+    });
 
-      photos = uploadedPhotos.map((photo) => ({
-        url: photo.url,
-        public_id: photo.public_id,
-        resource_type: photo.resource_type || "image",
-      }));
+    for (const photo of photosToDelete) {
+      if (!photo?.public_id) continue;
+      try {
+        await cloudinary.uploader.destroy(photo.public_id, {
+          resource_type: photo.resource_type || "image",
+        });
+      } catch (err) {
+        console.error("Cloudinary destroy error (property update photo)", err);
+      }
+    }
+
+    const retainedExistingPhotos = existingPhotos.filter((photo) => {
+      const photoPublicId = String(photo?.public_id || "").trim();
+      const photoUrl = String(photo?.url || "").trim();
+      return !deletedMarkers.has(photoPublicId) && !deletedMarkers.has(photoUrl);
+    });
+
+    const uploadedPhotoEntries = uploadedPhotos.map((photo) => ({
+      url: photo.url,
+      public_id: photo.public_id,
+      resource_type: photo.resource_type || "image",
+    }));
+
+    const photos = [...retainedExistingPhotos, ...uploadedPhotoEntries];
+
+    if (photos.length === 0) {
+      return res
+        .status(400)
+        .json({ status: false, message: "At least one photo is required" });
+    }
+
+    if (photos.length > 5) {
+      return res
+        .status(400)
+        .json({ status: false, message: "Maximum 5 photos are allowed" });
     }
 
     const uploadedPdf = Array.isArray(req.uploadedFiles)
       ? req.uploadedFiles.find((f) => f.field === "pdfDocument")
       : null;
 
-    if (uploadedPdf?.public_id && existing?.pdfDocument?.public_id) {
+    const shouldDeletePdf = String(deletePdf || "").toLowerCase() === "true";
+
+    if (shouldDeletePdf && existing?.pdfDocument?.public_id) {
+      try {
+        await cloudinary.uploader.destroy(existing.pdfDocument.public_id, {
+          resource_type: existing.pdfDocument.resource_type || "raw",
+        });
+      } catch (err) {
+        console.error("Cloudinary destroy error (property delete pdf)", err);
+      }
+    }
+
+    if (uploadedPdf?.public_id && existing?.pdfDocument?.public_id && !shouldDeletePdf) {
       try {
         await cloudinary.uploader.destroy(existing.pdfDocument.public_id, {
           resource_type: existing.pdfDocument.resource_type || "raw",
@@ -712,6 +840,8 @@ export const updateProperty = async (req, res) => {
           resource_type: uploadedPdf.resource_type || "raw",
           original_filename: uploadedPdf.original_filename || "",
         }
+      : shouldDeletePdf
+      ? null
       : existing.pdfDocument || null;
 
     const update = {
@@ -723,8 +853,8 @@ export const updateProperty = async (req, res) => {
       bhk: normalizedBhk,
       offerPrice: normalizedOfferPrice,
       estimatedMarketValue: normalizedEstimatedValue,
-      location: normalizedLocation,
-      district: normalizedDistrict,
+      location: toTitleCase(normalizedLocation),
+      district: toTitleCase(normalizedDistrict),
       possession: normalizedPossession,
       status: normalizedStatus,
       emdDate: emdDate ? new Date(emdDate) : existing.emdDate || null,
