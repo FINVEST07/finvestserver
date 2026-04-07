@@ -5,6 +5,7 @@ import axios from "axios";
 const validListingTypes = new Set(["Auction", "Distress"]);
 const validPropertyTypes = new Set([
   "Flat",
+  "Apartment",
   "Bungalow",
   "Villa",
   "Penthouse",
@@ -13,7 +14,7 @@ const validPropertyTypes = new Set([
   "Plot",
   "Commercial",
 ]);
-const validPossessionTypes = new Set(["Physical", "Symbolic"]);
+const validPossessionTypes = new Set(["Physical", "Symbolic", "Free Hold"]);
 const validStatusTypes = new Set(["Available", "Sold Out"]);
 
 const generatePropertyId = () => {

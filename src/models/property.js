@@ -66,7 +66,7 @@ const propertySchema = new mongoose.Schema(
         message: "Only letters are allowed in this field.",
       },
     },
-    possession: { type: String, enum: ["Physical", "Symbolic"], required: true },
+    possession: { type: String, enum: ["Physical", "Symbolic", "Free Hold"], required: true },
     status: { type: String, enum: ["Available", "Sold Out"], required: true },
     emdDate: { type: Date },
     eoiDate: { type: Date },

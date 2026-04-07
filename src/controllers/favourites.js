@@ -10,6 +10,53 @@ const collectionByType = {
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
+const toNormalizedId = (value) => String(value || "").trim();
+
+const buildIdQuery = (rawId) => {
+  const normalizedId = toNormalizedId(rawId);
+  if (!normalizedId) return null;
+
+  if (isValidObjectId(normalizedId)) {
+    return {
+      $or: [
+        { _id: new mongoose.Types.ObjectId(normalizedId) },
+        { _id: normalizedId },
+      ],
+    };
+  }
+
+  return { _id: normalizedId };
+};
+
+const buildBulkIdQuery = (ids) => {
+  const objectIds = [];
+  const stringIds = [];
+
+  for (const id of ids) {
+    const normalizedId = toNormalizedId(id);
+    if (!normalizedId) continue;
+
+    if (isValidObjectId(normalizedId)) {
+      objectIds.push(new mongoose.Types.ObjectId(normalizedId));
+    }
+
+    stringIds.push(normalizedId);
+  }
+
+  const or = [];
+  if (objectIds.length) {
+    or.push({ _id: { $in: objectIds } });
+  }
+  if (stringIds.length) {
+    or.push({ _id: { $in: stringIds } });
+  }
+
+  if (!or.length) return null;
+  if (or.length === 1) return or[0];
+
+  return { $or: or };
+};
+
 export const toggleFavourite = async (req, res) => {
   try {
     const { itemId, itemType } = req.body || {};
@@ -28,8 +75,8 @@ export const toggleFavourite = async (req, res) => {
       });
     }
 
-    const normalizedItemId = String(itemId).trim();
-    if (!isValidObjectId(normalizedItemId)) {
+    const normalizedItemId = toNormalizedId(itemId);
+    if (!normalizedItemId) {
       return res.status(400).json({
         status: false,
         message: "Invalid itemId",
@@ -39,9 +86,10 @@ export const toggleFavourite = async (req, res) => {
     const db = mongoose.connection.db;
     const itemCollection = collectionByType[itemType];
 
-    const existingItem = await db.collection(itemCollection).findOne({
-      _id: new mongoose.Types.ObjectId(normalizedItemId),
-    });
+    const itemLookupQuery = buildIdQuery(normalizedItemId);
+    const existingItem = itemLookupQuery
+      ? await db.collection(itemCollection).findOne(itemLookupQuery)
+      : null;
 
     if (!existingItem) {
       await db.collection("users").updateOne(
@@ -112,8 +160,8 @@ export const getFavourites = async (req, res) => {
 
     for (const fav of favouritesRaw) {
       const favType = typeof fav?.type === "string" ? fav.type : "";
-      const favId = typeof fav?.id === "string" ? fav.id : "";
-      if (!validItemTypes.has(favType) || !favId || !isValidObjectId(favId)) continue;
+      const favId = toNormalizedId(fav?.id);
+      if (!validItemTypes.has(favType) || !favId) continue;
 
       const key = `${favType}:${favId}`;
       if (seen.has(key)) continue;
@@ -121,27 +169,25 @@ export const getFavourites = async (req, res) => {
       deduped.push({ type: favType, id: favId });
     }
 
-    const blogIds = deduped
-      .filter((f) => f.type === "blog")
-      .map((f) => new mongoose.Types.ObjectId(f.id));
+    const blogIds = deduped.filter((f) => f.type === "blog").map((f) => f.id);
 
-    const propertyIds = deduped
-      .filter((f) => f.type === "property")
-      .map((f) => new mongoose.Types.ObjectId(f.id));
+    const propertyIds = deduped.filter((f) => f.type === "property").map((f) => f.id);
 
-    const jobIds = deduped
-      .filter((f) => f.type === "job")
-      .map((f) => new mongoose.Types.ObjectId(f.id));
+    const jobIds = deduped.filter((f) => f.type === "job").map((f) => f.id);
+
+    const blogQuery = buildBulkIdQuery(blogIds);
+    const propertyQuery = buildBulkIdQuery(propertyIds);
+    const jobQuery = buildBulkIdQuery(jobIds);
 
     const [blogs, properties, jobs] = await Promise.all([
-      blogIds.length
-        ? db.collection("blogs").find({ _id: { $in: blogIds } }).sort({ createdAt: -1 }).toArray()
+      blogQuery
+        ? db.collection("blogs").find(blogQuery).sort({ createdAt: -1 }).toArray()
         : Promise.resolve([]),
-      propertyIds.length
-        ? db.collection("properties").find({ _id: { $in: propertyIds } }).sort({ createdAt: -1 }).toArray()
+      propertyQuery
+        ? db.collection("properties").find(propertyQuery).sort({ createdAt: -1 }).toArray()
         : Promise.resolve([]),
-      jobIds.length
-        ? db.collection("jobs").find({ _id: { $in: jobIds } }).sort({ createdAt: -1 }).toArray()
+      jobQuery
+        ? db.collection("jobs").find(jobQuery).sort({ createdAt: -1 }).toArray()
         : Promise.resolve([]),
     ]);
 
