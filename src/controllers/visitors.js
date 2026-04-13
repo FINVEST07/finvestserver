@@ -43,8 +43,8 @@ export const addVisitor = async (req, res) => {
 
 
 const MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  "jan", "feb", "mar", "apr", "may", "jun",
+  "jul", "aug", "sep", "oct", "nov", "dec"
 ];
 
 export const getDashboardNumbers = async (req, res) => {
@@ -54,16 +54,29 @@ export const getDashboardNumbers = async (req, res) => {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
 
-    const fiscalStartYear = currentMonth <= 3 ? currentYear - 1 : currentYear;
-    const fiscalEndYear = fiscalStartYear + 1;
+    // Get year filter from query (12 = This Year, 24 = Previous Year)
+    const yearFilter = parseInt(req.query.months) || 12;
 
-    const startOfFinancialYear = new Date(`${fiscalStartYear}-04-01T00:00:00.000Z`);
-    const endOfFinancialYear = new Date(`${fiscalEndYear}-03-31T23:59:59.999Z`);
+    // Financial year: May to April
+    // This Year: May 2025 - April 2026
+    // Previous Year: May 2024 - April 2025
+    let startYear, endYear;
+    
+    if (currentMonth >= 5) {
+      // We're in May or later, so "This Year" is currentYear to currentYear+1
+      startYear = yearFilter === 24 ? currentYear - 1 : currentYear;
+      endYear = startYear + 1;
+    } else {
+      // We're in Jan-Apr, so "This Year" is previousYear to currentYear
+      startYear = yearFilter === 24 ? currentYear - 2 : currentYear - 1;
+      endYear = startYear + 1;
+    }
 
-    const monthOrder = [
-      "04", "05", "06", "07", "08", "09",
-      "10", "11", "12", "01", "02", "03"
-    ];
+    // Month order: May, Jun, Jul, Aug, Sep, Oct, Nov, Dec, Jan, Feb, Mar, Apr
+    const monthOrder = ["05", "06", "07", "08", "09", "10", "11", "12", "01", "02", "03", "04"];
+
+    const startOfRange = new Date(`${startYear}-05-01T00:00:00.000Z`);
+    const endOfRange = new Date(`${endYear}-04-30T23:59:59.999Z`);
 
     const monthlyData = {};
     monthOrder.forEach(month => {
@@ -77,7 +90,7 @@ export const getDashboardNumbers = async (req, res) => {
 
     // Applications
     const applications = await db.collection("applications").find({
-      createdAt: { $gte: startOfFinancialYear, $lte: endOfFinancialYear }
+      createdAt: { $gte: startOfRange, $lte: endOfRange }
     }).toArray();
 
     applications.forEach(app => {
@@ -88,7 +101,7 @@ export const getDashboardNumbers = async (req, res) => {
 
     // Customers
     const customers = await db.collection("customers").find({
-      createdAt: { $gte: startOfFinancialYear, $lte: endOfFinancialYear }
+      createdAt: { $gte: startOfRange, $lte: endOfRange }
     }).toArray();
 
     customers.forEach(cust => {
@@ -99,7 +112,7 @@ export const getDashboardNumbers = async (req, res) => {
 
     // Enquiries
     const enquiries = await db.collection("enquiries").find({
-      createdAt: { $gte: startOfFinancialYear, $lte: endOfFinancialYear }
+      createdAt: { $gte: startOfRange, $lte: endOfRange }
     }).toArray();
 
     enquiries.forEach(enq => {
@@ -108,21 +121,31 @@ export const getDashboardNumbers = async (req, res) => {
       if (monthlyData[month]) monthlyData[month].enquiries += 1;
     });
 
-    // Visitors
+    // Visitors - fetch for all years in the range
     const visitorDoc = await db.collection("visitors").findOne({ name: "counter" });
 
     if (visitorDoc?.years) {
-      const visitorYears = [fiscalStartYear, fiscalEndYear];
-      visitorYears.forEach(year => {
-        const yearData = visitorDoc.years[year];
+      const visitorStartYear = startOfRange.getFullYear();
+      const visitorEndYear = endOfRange.getFullYear();
+      
+      // For May-April financial year, months 05-12 belong to start year, 01-04 to end year
+      for (let year = visitorStartYear; year <= visitorEndYear; year++) {
+        const yearData = visitorDoc.years[year.toString()];
         if (yearData) {
           for (const month in yearData) {
-            if (monthlyData[month]) {
+            const monthNum = parseInt(month);
+            // Only count months that belong to this financial year
+            // May-Dec (5-12) from start year, Jan-Apr (1-4) from end year
+            const isStartYear = (year === visitorStartYear);
+            const isEndYear = (year === visitorEndYear);
+            const belongsToFinancialYear = (isStartYear && monthNum >= 5) || (isEndYear && monthNum <= 4);
+            
+            if (monthlyData[month] && belongsToFinancialYear) {
               monthlyData[month].visitors += yearData[month];
             }
           }
         }
-      });
+      }
     }
 
     // Final formatted response
