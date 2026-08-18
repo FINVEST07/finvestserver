@@ -40,6 +40,10 @@ const jobSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    postingDateTime: {
+      type: Date,
+      default: null,
+    },
   },
   {
     collection: "jobs",

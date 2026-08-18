@@ -21,7 +21,7 @@ export const getMedia = async (req, res) => {
 
 export const createMedia = async (req, res) => {
   try {
-    const { text, label } = req.body;
+    const { text, label, postingDateTime } = req.body;
 
     if (!req.mediaUrl) {
       return res
@@ -37,6 +37,7 @@ export const createMedia = async (req, res) => {
       label: label || text || "",
       public_id: req.uploadInfo?.public_id || null,
       resource_type: req.uploadInfo?.resource_type || null,
+      postingDateTime: postingDateTime ? new Date(postingDateTime) : null,
       createdAt: new Date(),
     };
 
@@ -97,6 +98,8 @@ export const updateMedia = async (req, res) => {
       return res.status(400).json({ status: false, message: "Label is required" });
     }
 
+    const { postingDateTime } = req.body;
+
     const db = mongoose.connection.db;
     const objectId = new mongoose.Types.ObjectId(id);
     const existing = await db.collection("media").findOne({ _id: objectId });
@@ -110,6 +113,10 @@ export const updateMedia = async (req, res) => {
       text: inputLabel,
       updatedAt: new Date(),
     };
+
+    if (postingDateTime !== undefined) {
+      nextState.postingDateTime = postingDateTime ? new Date(postingDateTime) : null;
+    }
 
     if (req.mediaUrl) {
       nextState.url = req.mediaUrl;

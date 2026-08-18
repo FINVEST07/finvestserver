@@ -42,6 +42,7 @@ export const createJob = async (req, res) => {
     const location = normalizeString(req.body?.location);
     const salary = normalizeString(req.body?.salary);
     const type = normalizeString(req.body?.type);
+    const postingDateTime = req.body?.postingDateTime;
 
     if (!title || !description) {
       return res.status(400).json({ status: false, message: "Title and description are required" });
@@ -63,6 +64,7 @@ export const createJob = async (req, res) => {
       type,
       thumbnailUrl,
       thumbnailPublicId,
+      postingDateTime: postingDateTime ? new Date(postingDateTime) : null,
     });
 
     return res.status(201).json({
@@ -89,6 +91,7 @@ export const updateJob = async (req, res) => {
     const location = normalizeString(req.body?.location);
     const salary = normalizeString(req.body?.salary);
     const type = normalizeString(req.body?.type);
+    const postingDateTime = req.body?.postingDateTime;
 
     if (!title || !description) {
       return res.status(400).json({ status: false, message: "Title and description are required" });
@@ -131,6 +134,7 @@ export const updateJob = async (req, res) => {
           type,
           thumbnailUrl,
           thumbnailPublicId,
+          postingDateTime: postingDateTime ? new Date(postingDateTime) : null,
         },
       },
       { new: true }

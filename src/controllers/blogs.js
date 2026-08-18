@@ -63,7 +63,7 @@ export const getBlogById = async (req, res) => {
 
 export const createBlog = async (req, res) => {
   try {
-    const { title, content } = req.body;
+    const { title, content, postingDateTime } = req.body;
 
     if (!title || !content) {
       return res
@@ -95,6 +95,7 @@ export const createBlog = async (req, res) => {
       thumbnailUrl,
       thumbnailPublicId,
       slug,
+      postingDateTime: postingDateTime ? new Date(postingDateTime) : null,
       createdAt: new Date(),
     };
 
@@ -147,7 +148,7 @@ export const updateBlog = async (req, res) => {
     const { id } = req.params;
     if (!id) return res.status(400).json({ status: false, message: "Id required" });
 
-    const { title, content } = req.body;
+    const { title, content, postingDateTime } = req.body;
 
     const db = mongoose.connection.db;
     const existing = await db
@@ -157,6 +158,9 @@ export const updateBlog = async (req, res) => {
     if (!existing) return res.status(404).json({ status: false, message: "Blog not found" });
 
     const update = {};
+    if (postingDateTime !== undefined) {
+      update.postingDateTime = postingDateTime ? new Date(postingDateTime) : null;
+    }
     if (typeof title === "string" && title.trim()) update.title = title.trim();
     if (typeof content === "string" && content.trim()) update.content = content.trim();
 

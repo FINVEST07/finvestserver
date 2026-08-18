@@ -80,6 +80,9 @@ const propertySchema = new mongoose.Schema(
     bankName: { type: String, trim: true, default: "" },
     contactPerson: { type: String, trim: true, default: "" },
     contactNumber: { type: String, trim: true, default: "" },
+    inspectionDateTime: { type: Date },
+    postingDateTime: { type: Date },
+    highlights: { type: String, trim: true, default: "" },
     pdfDocument: { type: propertyDocumentSchema, default: () => ({}) },
   },
   {

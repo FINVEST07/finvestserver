@@ -49,6 +49,7 @@ import {
   getPropertyById,
   getProperties,
   updateProperty,
+  updatePropertyListingType,
 } from "./controllers/properties.js";
 import {
   createJob,
@@ -58,6 +59,15 @@ import {
   updateJob,
 } from "./controllers/jobs.js";
 import { getFavourites, toggleFavourite } from "./controllers/favourites.js";
+import { createOrder, verifyPayment, checkPremium } from "./controllers/payments.js";
+import {
+  getPromoCodes,
+  getPromoCodeById,
+  createPromoCode,
+  updatePromoCode,
+  deletePromoCode,
+  validatePromoCode,
+} from "./controllers/promoCodes.js";
 import { requireUserAuth } from "./middlewares/auth.js";
 
 const approuter = Router();
@@ -138,6 +148,7 @@ approuter.get("/api/properties/:id/document", getPropertyDocument);
 approuter.get("/api/properties/:id", getPropertyById);
 approuter.post("/api/properties", propertyUpload, createProperty);
 approuter.put("/api/properties/:id", propertyUpload, updateProperty);
+approuter.put("/api/properties/:id/type", updatePropertyListingType);
 approuter.delete("/api/properties/:id", deleteProperty);
 
 // Jobs routes
@@ -150,6 +161,19 @@ approuter.delete("/api/jobs/:id", deleteJob);
 // Favourites routes
 approuter.post("/api/favourites/toggle", requireUserAuth, toggleFavourite);
 approuter.get("/api/favourites", requireUserAuth, getFavourites);
+
+// Payment routes
+approuter.post("/api/payments/create-order", requireUserAuth, createOrder);
+approuter.post("/api/payments/verify", requireUserAuth, verifyPayment);
+approuter.get("/api/payments/premium-status", requireUserAuth, checkPremium);
+
+// Promo Code routes
+approuter.get("/api/promocodes", getPromoCodes);
+approuter.get("/api/promocodes/:id", getPromoCodeById);
+approuter.post("/api/promocodes", createPromoCode);
+approuter.put("/api/promocodes/:id", updatePromoCode);
+approuter.delete("/api/promocodes/:id", deletePromoCode);
+approuter.post("/api/promocodes/validate", validatePromoCode);
 
 // Dynamic sitemap
 approuter.get("/sitemap.xml", getSitemap);

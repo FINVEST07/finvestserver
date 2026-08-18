@@ -217,7 +217,6 @@ export const getCustomers = async (req, res) => {
   try {
     const db = mongoose.connection.db;
 
-    // Await the result and sort by createdAt descending (-1)
     const users = await db
       .collection("customers")
       .find({})
@@ -230,8 +229,46 @@ export const getCustomers = async (req, res) => {
       });
     }
 
+    const emails = users.map((u) => u.email).filter(Boolean);
+
+    const premiumUsers = await db
+      .collection("users")
+      .find({ email: { $in: emails } })
+      .project({ email: 1, premium: 1, premiumPlan: 1, premiumActivatedAt: 1, premiumExpiresAt: 1 })
+      .toArray();
+
+    const premiumMap = {};
+    premiumUsers.forEach((u) => {
+      premiumMap[u.email] = u;
+    });
+
+    const subscriptions = await db
+      .collection("subscriptions")
+      .find({ email: { $in: emails } })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    const subMap = {};
+    subscriptions.forEach((s) => {
+      if (!subMap[s.email]) {
+        subMap[s.email] = s;
+      }
+    });
+
+    const enrichedUsers = users.map((customer) => {
+      const u = premiumMap[customer.email] || {};
+      return {
+        ...customer,
+        premium: Boolean(u.premium),
+        premiumPlan: u.premiumPlan || null,
+        premiumActivatedAt: u.premiumActivatedAt || null,
+        premiumExpiresAt: u.premiumExpiresAt || null,
+        subscription: subMap[customer.email] || null,
+      };
+    });
+
     return res.status(200).json({
-      payload: users,
+      payload: enrichedUsers,
     });
   } catch (error) {
     console.error("Error in getCustomers:", error);

@@ -57,34 +57,61 @@ export const getDashboardNumbers = async (req, res) => {
     // Get year filter from query (12 = This Year, 24 = Previous Year)
     const yearFilter = parseInt(req.query.months) || 12;
 
-    // Financial year: May to April
-    // This Year: May 2025 - April 2026
-    // Previous Year: May 2024 - April 2025
-    let startYear, endYear;
-    
-    if (currentMonth >= 5) {
-      // We're in May or later, so "This Year" is currentYear to currentYear+1
-      startYear = yearFilter === 24 ? currentYear - 1 : currentYear;
-      endYear = startYear + 1;
+    let startOfRange;
+    let endOfRange;
+    let monthSeries;
+
+    if (yearFilter === 24) {
+      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+      start.setUTCMonth(start.getUTCMonth() - 23);
+      startOfRange = start;
+      endOfRange = end;
+
+      monthSeries = [];
+      const cursor = new Date(Date.UTC(startOfRange.getUTCFullYear(), startOfRange.getUTCMonth(), 1, 0, 0, 0, 0));
+      while (cursor <= endOfRange) {
+        const y = cursor.getUTCFullYear();
+        const m = cursor.getUTCMonth() + 1;
+        const month = String(m).padStart(2, "0");
+        const key = `${y}-${month}`;
+        const label = `${MONTH_NAMES[m - 1]} ${String(y).slice(-2)}`;
+        monthSeries.push({ key, year: y, month, label });
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+      }
     } else {
-      // We're in Jan-Apr, so "This Year" is previousYear to currentYear
-      startYear = yearFilter === 24 ? currentYear - 2 : currentYear - 1;
-      endYear = startYear + 1;
+      let startYear, endYear;
+
+      if (currentMonth >= 5) {
+        startYear = currentYear;
+        endYear = startYear + 1;
+      } else {
+        startYear = currentYear - 1;
+        endYear = startYear + 1;
+      }
+
+      const monthOrder = ["05", "06", "07", "08", "09", "10", "11", "12", "01", "02", "03", "04"];
+
+      startOfRange = new Date(`${startYear}-05-01T00:00:00.000Z`);
+      endOfRange = new Date(`${endYear}-04-30T23:59:59.999Z`);
+
+      monthSeries = monthOrder.map((month) => {
+        const isStartYearMonth = parseInt(month) >= 5;
+        const year = isStartYearMonth ? startYear : endYear;
+        const m = parseInt(month);
+        const key = `${year}-${month}`;
+        const label = MONTH_NAMES[m - 1];
+        return { key, year, month, label };
+      });
     }
 
-    // Month order: May, Jun, Jul, Aug, Sep, Oct, Nov, Dec, Jan, Feb, Mar, Apr
-    const monthOrder = ["05", "06", "07", "08", "09", "10", "11", "12", "01", "02", "03", "04"];
-
-    const startOfRange = new Date(`${startYear}-05-01T00:00:00.000Z`);
-    const endOfRange = new Date(`${endYear}-04-30T23:59:59.999Z`);
-
     const monthlyData = {};
-    monthOrder.forEach(month => {
-      monthlyData[month] = {
+    monthSeries.forEach(({ key }) => {
+      monthlyData[key] = {
         applications: 0,
         users: 0,
         visitors: 0,
-        enquiries: 0
+        enquiries: 0,
       };
     });
 
@@ -95,8 +122,10 @@ export const getDashboardNumbers = async (req, res) => {
 
     applications.forEach(app => {
       const date = new Date(app.createdAt);
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      if (monthlyData[month]) monthlyData[month].applications += 1;
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const key = `${year}-${month}`;
+      if (monthlyData[key]) monthlyData[key].applications += 1;
     });
 
     // Customers
@@ -106,8 +135,10 @@ export const getDashboardNumbers = async (req, res) => {
 
     customers.forEach(cust => {
       const date = new Date(cust.createdAt);
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      if (monthlyData[month]) monthlyData[month].users += 1;
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const key = `${year}-${month}`;
+      if (monthlyData[key]) monthlyData[key].users += 1;
     });
 
     // Enquiries
@@ -117,44 +148,32 @@ export const getDashboardNumbers = async (req, res) => {
 
     enquiries.forEach(enq => {
       const date = new Date(enq.createdAt);
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      if (monthlyData[month]) monthlyData[month].enquiries += 1;
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const key = `${year}-${month}`;
+      if (monthlyData[key]) monthlyData[key].enquiries += 1;
     });
 
     // Visitors - fetch for all years in the range
     const visitorDoc = await db.collection("visitors").findOne({ name: "counter" });
 
     if (visitorDoc?.years) {
-      const visitorStartYear = startOfRange.getFullYear();
-      const visitorEndYear = endOfRange.getFullYear();
-      
-      // For May-April financial year, months 05-12 belong to start year, 01-04 to end year
-      for (let year = visitorStartYear; year <= visitorEndYear; year++) {
-        const yearData = visitorDoc.years[year.toString()];
-        if (yearData) {
-          for (const month in yearData) {
-            const monthNum = parseInt(month);
-            // Only count months that belong to this financial year
-            // May-Dec (5-12) from start year, Jan-Apr (1-4) from end year
-            const isStartYear = (year === visitorStartYear);
-            const isEndYear = (year === visitorEndYear);
-            const belongsToFinancialYear = (isStartYear && monthNum >= 5) || (isEndYear && monthNum <= 4);
-            
-            if (monthlyData[month] && belongsToFinancialYear) {
-              monthlyData[month].visitors += yearData[month];
-            }
-          }
+      monthSeries.forEach(({ key, year, month }) => {
+        const yearData = visitorDoc.years?.[year.toString()];
+        const val = yearData?.[month];
+        if (typeof val === "number" && monthlyData[key]) {
+          monthlyData[key].visitors += val;
         }
-      }
+      });
     }
 
     // Final formatted response
-    const result = monthOrder.map(monthNum => ({
-      month: MONTH_NAMES[parseInt(monthNum) - 1],
-      visitors: monthlyData[monthNum].visitors,
-      users: monthlyData[monthNum].users,
-      applications: monthlyData[monthNum].applications,
-      enquiries: monthlyData[monthNum].enquiries
+    const result = monthSeries.map(({ key, label }) => ({
+      month: label,
+      visitors: monthlyData[key].visitors,
+      users: monthlyData[key].users,
+      applications: monthlyData[key].applications,
+      enquiries: monthlyData[key].enquiries,
     }));
 
     return res.status(200).json({ payload: result });

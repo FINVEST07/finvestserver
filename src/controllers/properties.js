@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { v2 as cloudinary } from "cloudinary";
 import axios from "axios";
 
-const validListingTypes = new Set(["Auction", "Distress"]);
+const validListingTypes = new Set(["Auction", "Distress", "New", "Resale"]);
 const validPropertyTypes = new Set([
   "Flat",
   "Apartment",
@@ -222,6 +222,9 @@ const shapePropertyForResponse = (property) => {
     bankName: property.bankName || "",
     contactPerson: property.contactPerson || "",
     contactNumber: property.contactNumber || property.phoneNumber || "",
+    inspectionDateTime: property.inspectionDateTime || null,
+    postingDateTime: property.postingDateTime || null,
+    highlights: property.highlights || "",
     photos: normalizedPhotos,
     pdfDocument: shapePdfDocumentForResponse(property.pdfDocument),
     createdAt: fallbackCreatedAt,
@@ -359,6 +362,56 @@ export const getPropertyById = async (req, res) => {
   }
 };
 
+export const updatePropertyListingType = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: false, message: "Invalid property id" });
+    }
+
+    const { type } = req.body;
+    if (!type || !validListingTypes.has(type)) {
+      return res.status(400).json({ status: false, message: "Invalid listing type" });
+    }
+
+    const db = mongoose.connection.db;
+    const property = await db
+      .collection("properties")
+      .findOne({ _id: new mongoose.Types.ObjectId(id) });
+
+    if (!property) {
+      return res.status(404).json({ status: false, message: "Property not found" });
+    }
+
+    if (type === "Auction" && !property?.emdDate) {
+      return res.status(400).json({
+        status: false,
+        message: "EMD Date is required for Auction property",
+      });
+    }
+
+    if (type === "Distress" && !property?.eoiDate) {
+      return res.status(400).json({
+        status: false,
+        message: "EOI Date is required for Alternate Investment",
+      });
+    }
+
+    await db.collection("properties").updateOne(
+      { _id: new mongoose.Types.ObjectId(id) },
+      { $set: { type, updatedAt: new Date() } }
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: "Property type updated",
+    });
+  } catch (error) {
+    console.error("updatePropertyListingType error", error);
+    return res.status(500).json({ status: false, message: "Failed to update property type" });
+  }
+};
+
 export const createProperty = async (req, res) => {
   try {
     const {
@@ -375,6 +428,8 @@ export const createProperty = async (req, res) => {
       status,
       emdDate,
       eoiDate,
+      inspectionDateTime,
+      postingDateTime,
       flatNo,
       propertyOrSocietyName,
       floor,
@@ -382,6 +437,7 @@ export const createProperty = async (req, res) => {
       bankName,
       contactPerson,
       contactNumber,
+      highlights,
 
       // Backward compatibility with previous payload names
       propertyName,
@@ -396,7 +452,7 @@ export const createProperty = async (req, res) => {
     const normalizedLocation = normalizeSpaces(location || area || "");
     const normalizedDistrict = normalizeSpaces(district || "");
     const normalizedPossession = String(possession || "").trim();
-    const normalizedStatus = String(status || "").trim();
+    const normalizedStatus = String(status || "Available").trim();
 
     const normalizedOfferPrice = parsePrice(offerPrice ?? price);
     const normalizedEstimatedValue = parsePrice(estimatedMarketValue);
@@ -459,10 +515,18 @@ export const createProperty = async (req, res) => {
       return res.status(400).json({ status: false, message: "EOI Date is required for Alternate property" });
     }
 
-    if (normalizedContactNumber && !/^\d{10,15}$/.test(normalizedContactNumber)) {
+    if (type !== "Distress" && type !== "New" && type !== "Resale" && !inspectionDateTime) {
+      return res.status(400).json({ status: false, message: "Inspection Date & Time is required" });
+    }
+
+    if (!postingDateTime) {
+      return res.status(400).json({ status: false, message: "Posting Date & Time is required" });
+    }
+
+    if (normalizedContactNumber && !/^\d{10}$/.test(normalizedContactNumber)) {
       return res.status(400).json({
         status: false,
-        message: "Contact Number must be numeric and between 10 to 15 digits",
+        message: "Contact Number must be exactly 10 digits",
       });
     }
 
@@ -521,6 +585,8 @@ export const createProperty = async (req, res) => {
       status: normalizedStatus,
       emdDate: emdDate ? new Date(emdDate) : null,
       eoiDate: eoiDate ? new Date(eoiDate) : null,
+      inspectionDateTime: inspectionDateTime ? new Date(inspectionDateTime) : null,
+      postingDateTime: postingDateTime ? new Date(postingDateTime) : null,
       flatNo: String(flatNo || "").trim(),
       propertyOrSocietyName: normalizedPropertyOrSocietyName,
       floor: String(floor || "").trim(),
@@ -528,6 +594,7 @@ export const createProperty = async (req, res) => {
       bankName: String(bankName || "").trim(),
       contactPerson: String(contactPerson || "").trim(),
       contactNumber: normalizedContactNumber,
+      highlights: String(highlights || "").trim(),
       pdfDocument: uploadedPdf
         ? {
             url: uploadedPdf.url,
@@ -648,12 +715,15 @@ export const updateProperty = async (req, res) => {
       status,
       emdDate,
       eoiDate,
+      inspectionDateTime,
+      postingDateTime,
       flatNo,
       propertyOrSocietyName,
       fullAddress,
       bankName,
       contactPerson,
       contactNumber,
+      highlights,
       deletedImages,
       deletePdf,
 
@@ -733,10 +803,18 @@ export const updateProperty = async (req, res) => {
       return res.status(400).json({ status: false, message: "EOI Date is required for Alternate property" });
     }
 
-    if (normalizedContactNumber && !/^\d{10,15}$/.test(normalizedContactNumber)) {
+    if (type !== "Distress" && type !== "New" && type !== "Resale" && !inspectionDateTime && !existing.inspectionDateTime) {
+      return res.status(400).json({ status: false, message: "Inspection Date & Time is required" });
+    }
+
+    if (!postingDateTime && !existing.postingDateTime) {
+      return res.status(400).json({ status: false, message: "Posting Date & Time is required" });
+    }
+
+    if (normalizedContactNumber && !/^\d{10}$/.test(normalizedContactNumber)) {
       return res.status(400).json({
         status: false,
-        message: "Contact Number must be numeric and between 10 to 15 digits",
+        message: "Contact Number must be exactly 10 digits",
       });
     }
 
@@ -860,12 +938,19 @@ export const updateProperty = async (req, res) => {
       status: normalizedStatus,
       emdDate: emdDate ? new Date(emdDate) : existing.emdDate || null,
       eoiDate: eoiDate ? new Date(eoiDate) : existing.eoiDate || null,
+      inspectionDateTime: inspectionDateTime
+        ? new Date(inspectionDateTime)
+        : existing.inspectionDateTime || null,
+      postingDateTime: postingDateTime
+        ? new Date(postingDateTime)
+        : existing.postingDateTime || null,
       flatNo: String(flatNo || existing.flatNo || "").trim(),
       propertyOrSocietyName: normalizedPropertyOrSocietyName,
       fullAddress: normalizedFullAddress,
       bankName: String(bankName || existing.bankName || "").trim(),
       contactPerson: String(contactPerson || existing.contactPerson || "").trim(),
       contactNumber: normalizedContactNumber,
+      highlights: String(highlights || existing.highlights || "").trim(),
       pdfDocument,
 
       // Compatibility mirrors
