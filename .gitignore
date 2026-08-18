@@ -51,3 +51,6 @@ temp/
 # Backup files
 *.bak
 *.backup
+
+# PM2 ecosystem config (contains secrets)
+ecosystem.config.cjs
