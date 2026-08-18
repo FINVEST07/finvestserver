@@ -97,6 +97,7 @@ const sendInvoiceEmail = async ({ email, planLabel, productLabel, baseAmount, gs
   `;
 
   try {
+    console.log(`[sendInvoiceEmail] Attempting to send invoice to ${email} from ${mailFrom}`);
     const result = await resend.emails.send({
       from: mailFrom,
       to: [email],
@@ -104,11 +105,13 @@ const sendInvoiceEmail = async ({ email, planLabel, productLabel, baseAmount, gs
       html,
     });
 
+    console.log(`[sendInvoiceEmail] Resend response:`, JSON.stringify(result));
+
     if (result?.error) {
       throw new Error(result.error.message || "invoice_email_send_failed");
     }
 
-    console.log(`[sendInvoiceEmail] Invoice sent to ${email}`);
+    console.log(`[sendInvoiceEmail] Invoice sent to ${email}, email ID: ${result?.data?.id || "N/A"}`);
     return { sent: true };
   } catch (err) {
     console.error(`[sendInvoiceEmail] Failed to send invoice to ${email}:`, err?.message || err);
@@ -135,16 +138,16 @@ const getRazorpay = () => {
 const GST_RATE = 0.18;
 
 const PLAN_DURATIONS = {
-  "1m": { label: "1 Month", durationDays: 30 },
-  "3m": { label: "3 Months", durationDays: 90 },
-  "1y": { label: "1 Year", durationDays: 365 },
+  "1m": { label: "Monthly", durationDays: 30 },
+  "3m": { label: "Quarterly", durationDays: 90 },
+  "1y": { label: "Yearly", durationDays: 365 },
 };
 
 const PRODUCT_PRICES = {
-  auction: { "1m": 249900, "3m": 499900, "1y": 1499900 },
-  "alternate-investment": { "1m": 249900, "3m": 499900, "1y": 1499900 },
-  "new-resale": { "1m": 249900, "3m": 499900, "1y": 1499900 },
-  all: { "1m": 499900, "3m": 899900, "1y": 2499900 },
+  auction: { "1m": 499900, "3m": 999900, "1y": 2999900 },
+  "alternate-investment": { "1m": 499900, "3m": 999900, "1y": 2999900 },
+  "new-resale": { "1m": 499900, "3m": 999900, "1y": 2999900 },
+  all: { "1m": 499900, "3m": 999900, "1y": 2999900 },
 };
 
 const PRODUCT_LABELS = {
