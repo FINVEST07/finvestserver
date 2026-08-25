@@ -547,10 +547,42 @@ export const checkPremium = async (req, res) => {
       return res.status(200).json({ status: true, premium: false, premiumProducts: [] });
     }
 
+    const now = new Date();
+    let latestExpiry = null;
+
+    if (Array.isArray(user.premiumSubscriptions)) {
+      for (const sub of user.premiumSubscriptions) {
+        const expiry = new Date(sub.expiresAt);
+        if (now <= expiry && (!latestExpiry || expiry > latestExpiry)) {
+          latestExpiry = expiry;
+        }
+      }
+    }
+
+    if (user.premiumExpiresAt) {
+      const expiry = new Date(user.premiumExpiresAt);
+      if (now <= expiry && (!latestExpiry || expiry > latestExpiry)) {
+        latestExpiry = expiry;
+      }
+    }
+
+    if (!latestExpiry && isPremiumActive(user)) {
+      const plan = PLAN_DURATIONS[user.premiumPlan];
+      const activatedAt = user.premiumActivatedAt ? new Date(user.premiumActivatedAt) : null;
+      if (plan && activatedAt) {
+        const computed = new Date(activatedAt);
+        computed.setDate(computed.getDate() + plan.durationDays);
+        if (now <= computed) {
+          latestExpiry = computed;
+        }
+      }
+    }
+
     return res.status(200).json({
       status: true,
       premium: true,
       premiumProducts: activeProducts,
+      premiumExpiresAt: latestExpiry ? latestExpiry.toISOString() : null,
     });
   } catch (error) {
     console.error("checkPremium error:", error?.message || error);
